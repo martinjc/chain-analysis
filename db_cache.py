@@ -34,15 +34,14 @@ class MongoDBCache(object):
         self.refresh_time = refresh_time
 
 
-    def document_exists(self, collection, _id):
-
+    def document_exists(self, collection, query):
         """
-        Checks to see if a document with the given '_id' exists within the database. Will
+        Checks to see if a document matching the query exists within the database. Will
         also check for presence of 'last_modified' within the document, and return values
         according to document freshness
         """
 
-        item = self.db[collection].find_one({'_id': ObjectId(_id)})
+        item = self.db[collection].find_one(query)
 
         # item exists
         if item is not None:
@@ -66,18 +65,16 @@ class MongoDBCache(object):
             return False
 
 
-    def get_document(self, collection, _id):
-        assert self.document_exists(_id)
-        return self.db[collection].find_one({'_id': ObjectId(_id)})
+    def get_document(self, collection, query):
+        assert self.document_exists(collection, query)
+        return self.db[collection].find_one(query)
 
 
-    def put_document(self, collection, _id, data):
-
+    def put_document(self, collection, data):
         if not data.get('last_modified'):
             data['last_modified'] = calendar.timegm(datetime.utcnow().utctimetuple())
-
-        data['_id'] = _id
         return self.db[collection].save(data)
+
 
     def get_collection(self, collection):
         return self.db[collection]

@@ -59,7 +59,7 @@ if __name__ == "__main__":
     mcdonalds = '4c41df47520fa5933a41caac'
     tesco = '4c14b6aea1010f479fd94c18'
 
-    print is_chain(mcdonalds)
+    print is_chain(northcliffe)
 
 
 
