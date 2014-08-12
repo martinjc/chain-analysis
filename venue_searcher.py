@@ -53,15 +53,17 @@ class VenueSearcher:
         params['intent'] = 'global'
         params['limit'] = 50
         params['query'] = query
+        
+        _id = ''.join(x.encode('hex') for x in '%s' % (query.replace('/', '')))
 
-        if self.cache.document_exists('global_searches', '%s' % (query.replace('/', ''))):
-            results = self.cache.get_document('global_searches', '%s' % (query.replace('/', '')))
+        if self.cache.document_exists('global_searches', _id):
+            results = self.cache.get_document('global_searches', _id)
             return results['response']['venues']
         else:
             try:
                 results = self.wrapper.query_routine('venues', 'search', params, True)
                 if not results is None:
-                    self.cache.put_document('global_searches', '%s' % (query.replace('/', '')) results)
+                    self.cache.put_document('global_searches', _id, results)
                 return results['response']['venues']
             except urllib2.HTTPError, e:
                 pass
@@ -85,14 +87,16 @@ class VenueSearcher:
         params['categoryId'] = categories
         params['query'] = query
 
-        if self.cache.document_exists('local_searches','%s,%s,%s' % (query.replace('/', ''), params['ll'], radius)):
-            results = self.cache.get_document('local_searches', '%s,%s,%s' % (query.replace('/', ''), params['ll'], radius))
+        _id = ''.join(x.encode('hex') for x in '%s,%s,%s' % (query.replace('/', ''), params['ll'], radius))
+
+        if self.cache.document_exists('local_searches', _id):
+            results = self.cache.get_document('local_searches', _id)
             return results['response']['venues']
         else:
             try:
                 results = self.wrapper.query_routine('venues', 'search', params, True)
                 if not results is None:
-                    self.cache.put_document('local_searches', '%s,%s,%s' % (query.replace('/', ''), params['ll'], radius), results)
+                    self.cache.put_document('local_searches', _id, results)
                 return results['response']['venues']
             except urllib2.HTTPError, e:
                 pass
@@ -112,7 +116,9 @@ class VenueSearcher:
             except urllib2.URLError, e:
                 pass
             if not response is None:
-                self.cache.put_document('venues', '%s' % (venue_id), 'response')
+                print response
+                print type(response)
+                self.cache.put_document('venues', '%s' % (venue_id), response)
         
         return response['response']['venue']
 
@@ -132,14 +138,17 @@ class VenueSearcher:
         params['limit'] = 50
         params['categoryId'] = categories
 
-        if self.cache.document_exists('alternates', '%s,%s,%s' % (params['ll'], categories, radius)):
-            alternatives = self.cache.get_document('alternates', '%s,%s,%s' % (params['ll'], categories, radius))
+        _id = ''.join(x.encode('hex') for x in '%s,%s,%s' % (params['ll'], categories, radius))
+
+        if self.cache.document_exists('alternates', _id):
+            alternatives = self.cache.get_document('alternates', _id)
             return alternatives['response']['venues']
         else:
             try:
                 alternatives = self.wrapper.query_routine('venues', 'search', params, True)
                 if not alternatives is None:
-                    self.cache.put_document('alternates', '%s,%s,%s' % (params['ll'], categories, radius), alternatives)
+                    
+                    self.cache.put_document('alternates', _id, alternatives)
                 return alternatives['response']['venues']
             except urllib2.HTTPError, e:
                 pass

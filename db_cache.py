@@ -79,5 +79,9 @@ class MongoDBCache(object):
         data['_id'] = _id
         return self.db[collection].save(data)
 
+    def get_collection(self, collection):
+        return self.db[collection]
+
+
 
         
