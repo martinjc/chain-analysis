@@ -45,7 +45,7 @@ class MongoDBCache(object):
 
         # item exists
         if item is not None:
-
+            """
             # check item freshness
             if item.get('last_modified'):
                 refresh_time = datetime.now() - self.refresh_time
@@ -60,6 +60,8 @@ class MongoDBCache(object):
             # can't check item is fresh, assume it never goes stale
             else:
                 return True
+            """
+            return True
         # item does not exist
         else:
             return False

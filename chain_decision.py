@@ -28,21 +28,36 @@ def is_chain(venue_id):
         return True
 
     global_venues = vs.global_search(venue_data['name'])
+    for venue in global_venues:
+        print venue['name']
 
     global_similar_name_count = len(filter(lambda x: ratio(x, venue_data['name']) > 0.95, [venue['name'] for venue in global_venues]))
+
+    print global_similar_name_count
 
     if len(global_venues) > 1 and global_similar_name_count > 0:
         global_proportion = float(len(global_venues))/global_similar_name_count
     else:
         global_proportion = 0
 
+    print global_proportion
+
     local_venues = vs.local_search(venue_data, venue_data['name'], 5000)
+
+    for venue in local_venues:
+        print venue['name']
+
     local_similar_name_count = len(filter(lambda x: ratio(x, venue_data['name']) > 0.95, [venue['name'] for venue in local_venues]))
+
+    print local_similar_name_count
+
 
     if len(local_venues) > 1 and local_similar_name_count > 0:
         local_proportion = float(len(local_venues))/local_similar_name_count
     else: 
         local_proportion = 0
+
+    print local_proportion
 
     if global_proportion > 0.9 or local_proportion > 0.9:
         return True
@@ -59,7 +74,7 @@ if __name__ == "__main__":
     mcdonalds = '4c41df47520fa5933a41caac'
     tesco = '4c14b6aea1010f479fd94c18'
 
-    print is_chain(northcliffe)
+    print is_chain(starbucks2)
 
 
 
