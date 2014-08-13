@@ -34,7 +34,7 @@ class MongoDBCache(object):
         self.refresh_time = refresh_time
 
 
-    def document_exists(self, collection, query):
+    def document_exists(self, collection, query, check_fresh=False):
         """
         Checks to see if a document matching the query exists within the database. Will
         also check for presence of 'last_modified' within the document, and return values
@@ -45,30 +45,30 @@ class MongoDBCache(object):
 
         # item exists
         if item is not None:
-            """
-            # check item freshness
-            if item.get('last_modified'):
-                refresh_time = datetime.now() - self.refresh_time
-                last_modified = datetime.fromtimestamp(item['last_modified'])
+            if check_fresh:
+                # check item freshness
+                if item.get('last_modified'):
+                    refresh_time = datetime.now() - self.refresh_time
+                    last_modified = datetime.fromtimestamp(item['last_modified'])
 
-                # item is stale
-                if last_modified < refresh_time:
-                    return False
-                # item is fresh
+                    # item is stale
+                    if last_modified < refresh_time:
+                        return False
+                    # item is fresh
+                    else:
+                        return True
+                # can't check item is fresh, assume it never goes stale
                 else:
                     return True
-            # can't check item is fresh, assume it never goes stale
             else:
                 return True
-            """
-            return True
         # item does not exist
         else:
             return False
 
 
-    def get_document(self, collection, query):
-        assert self.document_exists(collection, query)
+    def get_document(self, collection, query, check_fresh=False):
+        assert self.document_exists(collection, query, check_fresh)
         return self.db[collection].find_one(query)
 
 
