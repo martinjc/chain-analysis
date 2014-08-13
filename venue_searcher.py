@@ -55,8 +55,8 @@ class VenueSearcher:
         params['query'] = query
         
 
-        if self.cache.document_exists('global_searches', {'params': params}):
-            results = self.cache.get_document('global_searches', {'params': params})
+        if self.cache.document_exists('global_searches', {'params': params}, True):
+            results = self.cache.get_document('global_searches', {'params': params}, True)
             return results['response']['venues']
         else:
             try:
@@ -87,8 +87,8 @@ class VenueSearcher:
         params['categoryId'] = categories
         params['query'] = query
 
-        if self.cache.document_exists('local_searches', {'params': params}):
-            results = self.cache.get_document('local_searches', {'params': params})
+        if self.cache.document_exists('local_searches', {'params': params}, True):
+            results = self.cache.get_document('local_searches', {'params': params}, True)
             return results['response']['venues']
         else:
             try:
@@ -105,8 +105,8 @@ class VenueSearcher:
 
     def get_venue_json(self, venue_id):
 
-        if self.cache.document_exists('venues', {'_id': '%s' % (venue_id)}):
-            response = self.cache.get_document('venues', {'_id': '%s' % (venue_id)})
+        if self.cache.document_exists('venues', {'_id': '%s' % (venue_id)}, True):
+            response = self.cache.get_document('venues', {'_id': '%s' % (venue_id)}, True)
         else:
             try:
                 response = self.wrapper.query_resource('venues', venue_id, get_params=self.params, userless=True)
@@ -136,8 +136,8 @@ class VenueSearcher:
         params['limit'] = 50
         params['categoryId'] = categories
 
-        if self.cache.document_exists('alternates', {'params': params}):
-            alternatives = self.cache.get_document('alternates', {'params': params})
+        if self.cache.document_exists('alternates', {'params': params}, True):
+            alternatives = self.cache.get_document('alternates', {'params': params}, True)
             return alternatives['response']['venues']
         else:
             try:
