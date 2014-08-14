@@ -72,6 +72,10 @@ class MongoDBCache(object):
         return self.db[collection].find_one(query)
 
 
+    def get_documents(self, collection, query):
+        return self.db[collection].find(query)
+
+
     def put_document(self, collection, data):
         if not data.get('last_modified'):
             data['last_modified'] = calendar.timegm(datetime.utcnow().utctimetuple())
