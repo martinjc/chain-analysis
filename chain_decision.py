@@ -16,6 +16,73 @@
 
 from Levenshtein import ratio
 from venue_searcher import VenueSearcher
+from db_cache import MongoDBCache
+
+class ChainDecider():
+
+    def __init__(self):
+
+        self.cache = MongoDBCache(db='foursq')
+        self.vs = VenueSearcher()
+
+    def check_chain_lookup(self, venue_id):
+
+        if self.cache.document_exists('chain_id_lookup', {'_id': venue_id}):
+            chain = self.cache.get_document('chain_id_lookup', {'_id': venue_id})['chain']
+
+            if self.cache.document_exists('chains', {'_id': chain}):
+                chain_data = self.cache.get_document('chains', {'_id': chain})
+                chain_data['venues'].append(venue_id)
+                self.cache.put_document('chains', chain_data)
+
+    def calc_chain_distance(v1, v2):
+
+        name_distance = ratio(v1['name'], v2['name'])
+        if v1['url'] or v2['url']:
+            if v1['url'] == v2['url'] and v1['url']:
+                url_distance = 0.5
+            else:
+                url_distance = 0
+        else:
+            url_distance = 0
+        if v1['twitter'] or v2['twitter']:
+            if v1['twitter'] == v2['twitter'] and v1['twitter']:
+                twitter_distance = 0.5
+            else:
+                twitter_distance = 0    
+        else:
+            twitter_distance = 0
+
+        return name_distance, url_distance, twitter_distance
+
+
+    def compare_to_cache(self, venue_id):
+
+        v1 = self.vs.get_venue_json(venue_id)
+
+        v2 = self.cache.get_document('venues', {'response.venue.name': v1['name']})
+        return v2
+
+        """
+
+        for v2 in self.cache.get_collection('venues').find():
+
+            name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
+            total_distance = name_distance + url_distance + twitter_distance
+
+            if total_distance >= 0.9:
+                chain = self.cache.get_document('chain_id_lookup', {'_id': v2['id']})['chain']
+                chain_data = self.cache.get_document('chains', {'_id': chain})
+                chain_data['venues'].append(venue_id)
+                self.cache.put_document('chains', chain_data)
+
+                chain_id = {'_id': v2['id'], 'chain': chain}
+                self.cache.put_document('chain_id_lookup', chain_id)
+
+        """
+
+
+
 
 
 def is_chain(venue_id):
@@ -74,7 +141,8 @@ if __name__ == "__main__":
     mcdonalds = '4c41df47520fa5933a41caac'
     tesco = '4c14b6aea1010f479fd94c18'
 
-    print is_chain(starbucks2)
+    cd = ChainDecider()
+    print cd.compare_to_cache(starbucks2)
 
 
 
