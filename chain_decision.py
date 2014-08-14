@@ -27,6 +27,43 @@ class ChainDecider():
         self.cache = MongoDBCache(db='foursq')
         self.vs = VenueSearcher()
 
+    def is_chain(self, venue_id):
+
+        venue_data = self.vs.get_venue_json(venue_id)
+
+        chain_id = None
+        chain_id = self.find_chain(venue_id)
+
+        if chain_id is None and vs.venue_has_chain_property(venue_data):
+            chain_id = uuid.uuid4().hex
+            self.add_to_chain(v1['id'], chain_id)
+
+        return chain_id
+
+
+    def find_chain(self, venue_id):
+
+        venue_data = self.vs.get_venue_json(venue_id)
+
+        chain_id = None
+        chain_id = self.check_chain_lookup(venue_id)
+           if chain_id is None:
+                chain_id = self.exact_compare_to_cache(venue_id)
+                if chain_id is None:
+                    chain_id = self.fuzzy_compare_to_whole_cache(venue_id)
+                    if chain_id is None:
+                        chain_id = self.global_chain_check(venue_id)
+                        if chain_id is None:
+                            chain_id = self.fuzzy_global_chain_check(venue_id)
+                            if chain_id is None:
+                                chain_id = self.local_chain_check(venue_id)
+                                if chain_id is None:
+                                    chain_id = self.fuzzy_local_chain_check(venue_id)
+        return chain_id
+
+
+
+
     
     def add_to_chain(self, venue_id, chain_id):
         if self.cache.document_exists('chains', {'_id': chain_id}):
@@ -98,16 +135,13 @@ class ChainDecider():
 
         venues = self.cache.get_documents('venues', query)
 
-        chain_id = None
         for venue in venues:
             chain_id = self.check_chain_lookup(venue['response']['venue']['id'])
             if chain_id is not None:
-                break
-
-        print v1['id'], chain_id
-        if chain_id is not None:
-            self.add_to_chain(v1['id'], chain_id)
-        
+                self.add_to_chain(v1['id'], chain_id)
+                return chain_id
+        return None
+            
             
     def fuzzy_compare_to_whole_cache(self, venue_id):
 
@@ -125,11 +159,77 @@ class ChainDecider():
                     chain_id = uuid.uuid4().hex
 
                 self.add_to_chain(v1['id'], chain_id)
-                break
+                return chain_id
+        return None
 
 
+    def global_chain_check(self, venue_id):
+
+        v1 = self.vs.get_venue_json(venue_id)
+
+        chain_id = None
+        global_venues = vs.global_search(v1['name'])
+        for venue in global_venues:
+            chain_id = self.check_chain_lookup(venue['response']['venue']['id'])
+            if chain_id is not None:
+                self.add_to_chain(v1['id'], chain_id)
+
+        return chain_id
 
 
+    def fuzzy_global_chain_check(self, venue_id):
+        v1 = self.vs.get_venue_json(venue_id)
+
+        chain_id = None
+        global_venues = vs.global_search(v1['name'])
+
+        for v2 in global_venues:
+            name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
+            total_distance = name_distance + url_distance + twitter_distance
+
+            if total_distance >= 0.9:
+                chain_id = self.check_chain_lookup(v2['id'])
+
+                if chain_id is None:                    
+                    chain_id = uuid.uuid4().hex
+
+                self.add_to_chain(v1['id'], chain_id)
+                return chain_id
+        return None
+
+
+    def local_chain_check(self, venue_id):
+
+        v1 = self.vs.get_venue_json(venue_id)
+
+        chain_id = None
+        local_venues = vs.local_search(v1, v1['name'], 5000)
+        for venue in local_venues:
+            chain_id = self.check_chain_lookup(venue['response']['venue']['id'])
+            if chain_id is not None:
+                self.add_to_chain(v1['id'], chain_id)
+
+        return chain_id
+
+    def fuzzy_local_chain_check(self, venue_id):
+        v1 = self.vs.get_venue_json(venue_id)
+
+        chain_id = None
+        local_venues = vs.local_search(v1, v1['name'], 5000)
+
+        for v2 in local_venues:
+            name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
+            total_distance = name_distance + url_distance + twitter_distance
+
+            if total_distance >= 0.9:
+                chain_id = self.check_chain_lookup(v2['id'])
+
+                if chain_id is None:                    
+                    chain_id = uuid.uuid4().hex
+
+                self.add_to_chain(v1['id'], chain_id)
+                return chain_id
+        return None
 
 
 def is_chain(venue_id):
@@ -141,42 +241,6 @@ def is_chain(venue_id):
     if vs.venue_has_chain_property(venue_data):
         return True
 
-    global_venues = vs.global_search(venue_data['name'])
-    for venue in global_venues:
-        print venue['name']
-
-    global_similar_name_count = len(filter(lambda x: ratio(x, venue_data['name']) > 0.95, [venue['name'] for venue in global_venues]))
-
-    print global_similar_name_count
-
-    if len(global_venues) > 1 and global_similar_name_count > 0:
-        global_proportion = float(len(global_venues))/global_similar_name_count
-    else:
-        global_proportion = 0
-
-    print global_proportion
-
-    local_venues = vs.local_search(venue_data, venue_data['name'], 5000)
-
-    for venue in local_venues:
-        print venue['name']
-
-    local_similar_name_count = len(filter(lambda x: ratio(x, venue_data['name']) > 0.95, [venue['name'] for venue in local_venues]))
-
-    print local_similar_name_count
-
-
-    if len(local_venues) > 1 and local_similar_name_count > 0:
-        local_proportion = float(len(local_venues))/local_similar_name_count
-    else: 
-        local_proportion = 0
-
-    print local_proportion
-
-    if global_proportion > 0.9 or local_proportion > 0.9:
-        return True
-    else:
-        return False
 
 
 
