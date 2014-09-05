@@ -93,7 +93,7 @@ class VenueSearcher:
         else:
             try:
                 results = self.wrapper.query_routine('venues', 'search', params, True)
-                if not results is None:
+                if results is not None:
                     results['params'] = params
                     self.cache.put_document('local_searches', results)
                 return results['response']['venues']

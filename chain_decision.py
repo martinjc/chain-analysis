@@ -19,6 +19,7 @@ import uuid
 from Levenshtein import ratio
 from venue_searcher import VenueSearcher
 from db_cache import MongoDBCache
+from category_utils import CategoryTree
 
 
 class ChainNotFoundError(RuntimeError):
@@ -41,6 +42,7 @@ class ChainDecider():
 
         self.cache = MongoDBCache(db='foursq')
         self.vs = VenueSearcher()
+        self.ct = CategoryTree()
 
         self.t_distance = t_distance
         self.u_distance = u_distance
@@ -58,27 +60,28 @@ class ChainDecider():
 
         venue_data = self.vs.get_venue_json(venue_id)
 
+        if len(venue_data['categories']) > 0:
+            category = venue_data['categories'][0]
+            root_category = self.ct.get_root_node_for_id(category['id'])
+            if root_category['foursq_id'] == "4e67e38e036454776db1fb3a":
+                return False, None, 0
+
         chain_id = None
         # compare to all known chains
         chain_id = self.find_chain(venue_id)
-
-        num_in_chain = 0
+        print chain_id
 
         # if no chain but is chain according to foursquare, create a new one
         if chain_id is None and vs.venue_has_chain_property(venue_data):
             chain_id = uuid.uuid4().hex
-            self.add_to_chain(v1['id'], chain_id)
-            return False, None, 1
+            self.add_to_chain(venu_data['id'], chain_id)
+            return True, chain_id, 1
+        elif chain_id is None:
+            return False, None, 0
         else:
-            # check the size of the chain
-            if self.cache.document_exists('chains', {'_id': chain_id}):
-                chain_data = self.cache.get_document('chains', {'_id': chain_id})
-                num_in_chain = len(chain_data['venues'])
-            if num_in_chain > 1:
-                return True, chain_id, num_in_chain
-            else:
-                return False, None, 1
-
+            chain_data = self.cache.get_document('chains', {'_id': chain_id})
+            num_in_chain = len(chain_data['venues'])
+            return True, chain_id, num_in_chain
 
 
     def find_chain(self, venue_id):
@@ -91,23 +94,31 @@ class ChainDecider():
         # check we don't already know which chain it belongs to
         chain_id = self.check_chain_lookup(venue_id)
         if chain_id is None:
+            print 'check_chain_lookup failed'
             # check the venue isn't the same as any we already know about
             chain_id = self.exact_compare_to_cache(venue_id)
             if chain_id is None:
+                print 'exact_compare_to_cache failed'
                 # check the venue isn't similar to any we already know about
                 chain_id = self.fuzzy_compare_to_whole_cache(venue_id)
                 if chain_id is None:
+                    print 'fuzzy_compare_to_whole_cache failed'
                     # check the venue exactly against results from a global search
                     chain_id = self.global_chain_check(venue_id)
                     if chain_id is None:
+                        print 'global_chain_check failed'
                         # check the venue similarity against results from a global search
                         chain_id = self.fuzzy_global_chain_check(venue_id)
                         if chain_id is None:
+                            print 'fuzzy_global_chain_check failed'
                             # check the venue exactly against results from a local search
                             chain_id = self.local_chain_check(venue_id)
                             if chain_id is None:
+                                print 'local_chain_check failed'
                                 # check the venue similarity against results from a local search
                                 chain_id = self.fuzzy_local_chain_check(venue_id)
+                                if chain_id is None:
+                                    print 'fuzzy_local_chain_check failed'
         return chain_id
 
 
@@ -155,7 +166,6 @@ class ChainDecider():
         calculates distance between two venues by comparing names, 
         twitter handles and URLs
         """
-        v2 = v2['response']['venue']
 
         #levenshtein distance of names
         name_distance = ratio(v1['name'], v2['name'])
@@ -219,19 +229,20 @@ class ChainDecider():
         v1 = self.vs.get_venue_json(venue_id)
 
         for v2 in self.cache.get_collection('venues').find():
+            if v2['response']['venue']['id'] != v1['id']:
 
-            name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
-            total_distance = name_distance + url_distance + twitter_distance
+                name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2['response']['venue'])
+                total_distance = name_distance + url_distance + twitter_distance
 
-            if total_distance >= self.sim_threshold:
-                chain_id = self.check_chain_lookup(v2['response']['venue']['id'])
+                if total_distance >= self.sim_threshold:
+                    chain_id = self.check_chain_lookup(v2['response']['venue']['id'])
 
-                if chain_id is None:                    
-                    chain_id = uuid.uuid4().hex
-                    self.add_to_chain(v2['response']['venue']['id'], chain_id)
+                    if chain_id is None:                    
+                        chain_id = uuid.uuid4().hex
+                        self.add_to_chain(v2['response']['venue']['id'], chain_id)
 
-                self.add_to_chain(v1['id'], chain_id)
-                return chain_id
+                    self.add_to_chain(v1['id'], chain_id)
+                    return chain_id
         return None
 
 
@@ -240,9 +251,9 @@ class ChainDecider():
         v1 = self.vs.get_venue_json(venue_id)
 
         chain_id = None
-        global_venues = vs.global_search(v1['name'])
+        global_venues = self.vs.global_search(v1['name'])
         for venue in global_venues:
-            chain_id = self.check_chain_lookup(venue['response']['venue']['id'])
+            chain_id = self.check_chain_lookup(venue['id'])
             if chain_id is not None:
                 self.add_to_chain(v1['id'], chain_id)
 
@@ -253,21 +264,22 @@ class ChainDecider():
         v1 = self.vs.get_venue_json(venue_id)
 
         chain_id = None
-        global_venues = vs.global_search(v1['name'])
+        global_venues = self.vs.global_search(v1['name'])
 
         for v2 in global_venues:
-            name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
-            total_distance = name_distance + url_distance + twitter_distance
+            if v2['id'] != v1['id']:
+                name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
+                total_distance = name_distance + url_distance + twitter_distance
 
-            if total_distance >= self.sim_threshold:
-                chain_id = self.check_chain_lookup(v2['response']['venue']['id'])
+                if total_distance >= self.sim_threshold:
+                    chain_id = self.check_chain_lookup(v2['id'])
 
-                if chain_id is None:                    
-                    chain_id = uuid.uuid4().hex
-                    self.add_to_chain(v2['response']['venue']['id'], chain_id)
+                    if chain_id is None:                    
+                        chain_id = uuid.uuid4().hex
+                        self.add_to_chain(v2['id'], chain_id)
 
-                self.add_to_chain(v1['id'], chain_id)
-                return chain_id
+                    self.add_to_chain(v1['id'], chain_id)
+                    return chain_id
         return None
 
 
@@ -276,9 +288,9 @@ class ChainDecider():
         v1 = self.vs.get_venue_json(venue_id)
 
         chain_id = None
-        local_venues = vs.local_search(v1, v1['name'], self.search_distance_m)
+        local_venues = self.vs.local_search(v1, v1['name'], self.search_distance_m)
         for venue in local_venues:
-            chain_id = self.check_chain_lookup(venue['response']['venue']['id'])
+            chain_id = self.check_chain_lookup(venue['id'])
             if chain_id is not None:
                 self.add_to_chain(v1['id'], chain_id)
 
@@ -288,21 +300,22 @@ class ChainDecider():
         v1 = self.vs.get_venue_json(venue_id)
 
         chain_id = None
-        local_venues = vs.local_search(v1, v1['name'], self.search_distance_m)
+        local_venues = self.vs.local_search(v1, v1['name'], self.search_distance_m)
 
         for v2 in local_venues:
-            name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
-            total_distance = name_distance + url_distance + twitter_distance
+            if v2['id'] != v1['id']:
+                name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
+                total_distance = name_distance + url_distance + twitter_distance
 
-            if total_distance >= self.sim_threshold:
-                chain_id = self.check_chain_lookup(v2['response']['venue']['id'])
+                if total_distance >= self.sim_threshold:
+                    chain_id = self.check_chain_lookup(v2['id'])
 
-                if chain_id is None:                    
-                    chain_id = uuid.uuid4().hex
-                    self.add_to_chain(v2['response']['venue']['id'], chain_id)
+                    if chain_id is None:                    
+                        chain_id = uuid.uuid4().hex
+                        self.add_to_chain(v2['id'], chain_id)
 
-                self.add_to_chain(v1['id'], chain_id)
-                return chain_id
+                    self.add_to_chain(v1['id'], chain_id)
+                    return chain_id
         return None
 
 
@@ -317,7 +330,7 @@ if __name__ == "__main__":
     costa = '4db656b50cb6729b6ab71531'
 
     cd = ChainDecider()
-    #print "northcliffe: %s,%s,%s" % (cd.is_chain(northcliffe))
+    print "northcliffe: %s,%s,%s" % (cd.is_chain(northcliffe))
     print "starbucks1: %s,%s,%s" % (cd.is_chain(starbucks1))
     #print "tesco: %s,%s,%s" % (cd.is_chain(tesco))
     #print "mcdonalds: %s,%s,%s" % (cd.is_chain(mcdonalds))
