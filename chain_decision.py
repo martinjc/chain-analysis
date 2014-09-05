@@ -263,7 +263,7 @@ class ChainDecider():
                 chain_id = self.check_chain_lookup(v2['id'])
 
                 if chain_id is None:                    
-                    chain_id = uuid.uuid4().hex
+                    raise ChainNotFoundError(v2['id'])
 
                 self.add_to_chain(v1['id'], chain_id)
                 return chain_id
@@ -297,7 +297,7 @@ class ChainDecider():
                 chain_id = self.check_chain_lookup(v2['id'])
 
                 if chain_id is None:                    
-                    chain_id = uuid.uuid4().hex
+                    raise ChainNotFoundError(v2['id'])
 
                 self.add_to_chain(v1['id'], chain_id)
                 return chain_id
