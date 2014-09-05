@@ -20,6 +20,15 @@ from Levenshtein import ratio
 from venue_searcher import VenueSearcher
 from db_cache import MongoDBCache
 
+
+class ChainNotFoundError(RuntimeError):
+    def __init__(self, venue_id):
+        self.venue_id = venue_id
+        
+    def __str__( self ):
+        return "Chain not found for venue: %s" % ( self.venue_id )
+
+
 class ChainDecider():
 
 
@@ -170,20 +179,28 @@ class ChainDecider():
 
 
     def exact_compare_to_cache(self, venue_id):
+        """
+        Checks for any venues in the cache with exactly the same name, URL and
+        Twitter handle as this venue. If it finds any, it adds this venue to 
+        the chain
+        """
 
         v1 = self.vs.get_venue_json(venue_id)
 
         # first, look for exact matches
         query = {'response.venue.name': v1['name']}
 
+        # see if we can match URL and/or Twitter handle too
         if v1.get('url'):
             query['response.venue.url'] = v1['url']
         if v1.get('contact'):
             if v1['contact'].get('twitter'):
                 query['response.venue.contact.twitter'] = v1['contact']['twitter']
 
+        # check the cache based on assembled query
         venues = self.cache.get_documents('venues', query)
 
+        # see if any returned venues belong to a chain - if so add this venue to that chain
         for venue in venues:
             chain_id = self.check_chain_lookup(venue['response']['venue']['id'])
             if chain_id is not None:
@@ -193,6 +210,11 @@ class ChainDecider():
             
             
     def fuzzy_compare_to_whole_cache(self, venue_id):
+        """
+        Checks for any venues in the cache with similar name, or same URL and
+        Twitter handle as this venue. If it finds any, it adds this venue to 
+        the chain        
+        """
 
         v1 = self.vs.get_venue_json(venue_id)
 
@@ -204,8 +226,9 @@ class ChainDecider():
             if total_distance >= self.sim_threshold:
                 chain_id = self.check_chain_lookup(v2['id'])
 
+                # technically this shouldn't happen
                 if chain_id is None:                    
-                    chain_id = uuid.uuid4().hex
+                    raise ChainNotFoundError(v2['id'])
 
                 self.add_to_chain(v1['id'], chain_id)
                 return chain_id
