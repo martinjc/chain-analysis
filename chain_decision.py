@@ -87,24 +87,24 @@ class ChainDecider():
         chain_id = None
         # check we don't already know which chain it belongs to
         chain_id = self.check_chain_lookup(venue_id)
-           if chain_id is None:
-                # check the venue isn't the same as any we already know about
-                chain_id = self.exact_compare_to_cache(venue_id)
+        if chain_id is None:
+            # check the venue isn't the same as any we already know about
+            chain_id = self.exact_compare_to_cache(venue_id)
+            if chain_id is None:
+                # check the venue isn't similar to any we already know about
+                chain_id = self.fuzzy_compare_to_whole_cache(venue_id)
                 if chain_id is None:
-                    # check the venue isn't similar to any we already know about
-                    chain_id = self.fuzzy_compare_to_whole_cache(venue_id)
+                    # check the venue exactly against results from a global search
+                    chain_id = self.global_chain_check(venue_id)
                     if chain_id is None:
-                        # check the venue exactly against results from a global search
-                        chain_id = self.global_chain_check(venue_id)
+                        # check the venue similarity against results from a global search
+                        chain_id = self.fuzzy_global_chain_check(venue_id)
                         if chain_id is None:
-                            # check the venue similarity against results from a global search
-                            chain_id = self.fuzzy_global_chain_check(venue_id)
+                            # check the venue exactly against results from a local search
+                            chain_id = self.local_chain_check(venue_id)
                             if chain_id is None:
-                                # check the venue exactly against results from a local search
-                                chain_id = self.local_chain_check(venue_id)
-                                if chain_id is None:
-                                    # check the venue similarity against results from a local search
-                                    chain_id = self.fuzzy_local_chain_check(venue_id)
+                                # check the venue similarity against results from a local search
+                                chain_id = self.fuzzy_local_chain_check(venue_id)
         return chain_id
 
     
@@ -120,7 +120,7 @@ class ChainDecider():
                 chain_data['venues'].append(venue_id)
                 self.cache.put_document('chains', chain_data)
         else:
-            chain_data = {'_id': chain_id, 'venues' = [venue_id]}
+            chain_data = {'_id': chain_id, 'venues': [venue_id]}
             self.cache.put_document('chains', chain_data)
 
         # add the chain to the lookup document for the venue
@@ -293,7 +293,7 @@ class ChainDecider():
             name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
             total_distance = name_distance + url_distance + twitter_distance
 
-            if total_distance >= self.sim_threshold)
+            if total_distance >= self.sim_threshold:
                 chain_id = self.check_chain_lookup(v2['id'])
 
                 if chain_id is None:                    
