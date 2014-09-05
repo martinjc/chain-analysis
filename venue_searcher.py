@@ -103,10 +103,10 @@ class VenueSearcher:
                 pass
 
 
-    def get_venue_json(self, venue_id):
+    def get_venue_json(self, venue_id, check_fresh=True):
 
-        if self.cache.document_exists('venues', {'_id': '%s' % (venue_id)}, True):
-            response = self.cache.get_document('venues', {'_id': '%s' % (venue_id)}, True)
+        if self.cache.document_exists('venues', {'_id': '%s' % (venue_id)}, check_fresh):
+            response = self.cache.get_document('venues', {'_id': '%s' % (venue_id)}, check_fresh)
         else:
             try:
                 response = self.wrapper.query_resource('venues', venue_id, get_params=self.params, userless=True)
