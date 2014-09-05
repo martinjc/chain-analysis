@@ -62,20 +62,23 @@ class ChainDecider():
         # compare to all known chains
         chain_id = self.find_chain(venue_id)
 
-        # if no chain, create a new one
+        num_in_chain = 0
+
+        # if no chain but is chain according to foursquare, create a new one
         if chain_id is None and vs.venue_has_chain_property(venue_data):
             chain_id = uuid.uuid4().hex
             self.add_to_chain(v1['id'], chain_id)
-
-        # check the size of the chain
-        if self.cache.document_exists('chains', {'_id': chain_id}):
-            chain_data = self.cache.get_document('chains', {'_id': chain_id})
-            num_in_chain = len(chain_data['venues'])
-
-        if num_in_chain > 1:
-            return True, chain_id, num_in_chain
+            return False, None, 1
         else:
-            return False, chain_id, num_in_chain
+            # check the size of the chain
+            if self.cache.document_exists('chains', {'_id': chain_id}):
+                chain_data = self.cache.get_document('chains', {'_id': chain_id})
+                num_in_chain = len(chain_data['venues'])
+            if num_in_chain > 1:
+                return True, chain_id, num_in_chain
+            else:
+                return False, None, 1
+
 
 
     def find_chain(self, venue_id):
@@ -107,7 +110,7 @@ class ChainDecider():
                                 chain_id = self.fuzzy_local_chain_check(venue_id)
         return chain_id
 
-    
+
     def add_to_chain(self, venue_id, chain_id):
         """
         Add a venue to the given chain
@@ -146,34 +149,31 @@ class ChainDecider():
         return chain_id
 
 
-    def calc_chain_distance(v1, v2):
+    def calc_chain_distance(self, v1, v2):
 
         """
         calculates distance between two venues by comparing names, 
         twitter handles and URLs
         """
+        v2 = v2['response']['venue']
+
         #levenshtein distance of names
         name_distance = ratio(v1['name'], v2['name'])
+        url_distance = 0
+        twitter_distance = 0
 
         # compare URLs
         if v1.get('url') and v2.get('url'):
             if v1['url'] or v2['url']:
                 if v1['url'] == v2['url'] and v1['url']:
                     url_distance = self.u_distance
-                else:
-                    url_distance = 0
-            else:
-                url_distance = 0
+
         # compare Twitter handles
         if v1.get('contact') and v2.get('contact'):
             if v1['contact'].get('twitter') and v2['contact'].get('twitter'):
                 if v1['contact']['twitter'] or v2['contact']['twitter']:
                     if v1['contact']['twitter'] == v2['contact']['twitter'] and v1['contact']['twitter']:
                         twitter_distance = self.t_distance
-                    else:
-                        twitter_distance = 0    
-                else:
-                    twitter_distance = 0
 
         return name_distance, url_distance, twitter_distance
 
@@ -207,8 +207,8 @@ class ChainDecider():
                 self.add_to_chain(v1['id'], chain_id)
                 return chain_id
         return None
-            
-            
+
+
     def fuzzy_compare_to_whole_cache(self, venue_id):
         """
         Checks for any venues in the cache with similar name, or same URL and
@@ -224,11 +224,11 @@ class ChainDecider():
             total_distance = name_distance + url_distance + twitter_distance
 
             if total_distance >= self.sim_threshold:
-                chain_id = self.check_chain_lookup(v2['id'])
+                chain_id = self.check_chain_lookup(v2['response']['venue']['id'])
 
-                # technically this shouldn't happen
                 if chain_id is None:                    
-                    raise ChainNotFoundError(v2['id'])
+                    chain_id = uuid.uuid4().hex
+                    self.add_to_chain(v2['response']['venue']['id'], chain_id)
 
                 self.add_to_chain(v1['id'], chain_id)
                 return chain_id
@@ -260,10 +260,11 @@ class ChainDecider():
             total_distance = name_distance + url_distance + twitter_distance
 
             if total_distance >= self.sim_threshold:
-                chain_id = self.check_chain_lookup(v2['id'])
+                chain_id = self.check_chain_lookup(v2['response']['venue']['id'])
 
                 if chain_id is None:                    
-                    raise ChainNotFoundError(v2['id'])
+                    chain_id = uuid.uuid4().hex
+                    self.add_to_chain(v2['response']['venue']['id'], chain_id)
 
                 self.add_to_chain(v1['id'], chain_id)
                 return chain_id
@@ -294,10 +295,11 @@ class ChainDecider():
             total_distance = name_distance + url_distance + twitter_distance
 
             if total_distance >= self.sim_threshold:
-                chain_id = self.check_chain_lookup(v2['id'])
+                chain_id = self.check_chain_lookup(v2['response']['venue']['id'])
 
                 if chain_id is None:                    
-                    raise ChainNotFoundError(v2['id'])
+                    chain_id = uuid.uuid4().hex
+                    self.add_to_chain(v2['response']['venue']['id'], chain_id)
 
                 self.add_to_chain(v1['id'], chain_id)
                 return chain_id
@@ -307,14 +309,19 @@ class ChainDecider():
 
 if __name__ == "__main__":
 
-    starbucks1 = '4b4ef4dbf964a520a4f726e3'
+    starbucks1 = '526903fb11d2cd6a3c51e1ff'
     northcliffe = '5030ef53e4b0beacbee84cef'
     starbucks2 = '5315d2d211d2c227cf2a7037'
-    mcdonalds = '4c41df47520fa5933a41caac'
+    mcdonalds = '4b6d80baf964a520b8782ce3'
     tesco = '4c14b6aea1010f479fd94c18'
+    costa = '4db656b50cb6729b6ab71531'
 
     cd = ChainDecider()
-    print cd.exact_compare_to_cache(northcliffe)
+    #print "northcliffe: %s,%s,%s" % (cd.is_chain(northcliffe))
+    print "starbucks1: %s,%s,%s" % (cd.is_chain(starbucks1))
+    #print "tesco: %s,%s,%s" % (cd.is_chain(tesco))
+    #print "mcdonalds: %s,%s,%s" % (cd.is_chain(mcdonalds))
+    #print "costa: %s,%s,%s" % (cd.is_chain(costa))
 
 
 
