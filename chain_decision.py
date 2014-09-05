@@ -22,52 +22,91 @@ from db_cache import MongoDBCache
 
 class ChainDecider():
 
-    def __init__(self):
+
+    """
+    ChainDecider is used to take any given Foursquare venue and decide
+    whether it belongs to a chain or not. 
+    """
+
+    def __init__(self, t_distance=0.5, u_distance=0.5, sim_threshold=0.9, search_distance_m=5000):
 
         self.cache = MongoDBCache(db='foursq')
         self.vs = VenueSearcher()
 
+        self.t_distance = t_distance
+        self.u_distance = u_distance
+        self.sim_threshold = sim_threshold
+        self.search_distance_m = search_distance_m
+
     def is_chain(self, venue_id):
+
+        """
+        Decides if the venue belongs to a chain.
+        If so, True and the chain_id are returned. 
+        If the venue does not belong to any known chain, a 
+        chain_id is created, and False is returned
+        """
 
         venue_data = self.vs.get_venue_json(venue_id)
 
         chain_id = None
+        # compare to all known chains
         chain_id = self.find_chain(venue_id)
 
+        # if no chain, create a new one
         if chain_id is None and vs.venue_has_chain_property(venue_data):
             chain_id = uuid.uuid4().hex
             self.add_to_chain(v1['id'], chain_id)
 
-        return chain_id
+        # check the size of the chain
+        if self.cache.document_exists('chains', {'_id': chain_id}):
+            chain_data = self.cache.get_document('chains', {'_id': chain_id})
+            num_in_chain = len(chain_data['venues'])
+
+        if num_in_chain > 1:
+            return True, chain_id, num_in_chain
+        else:
+            return False, chain_id, num_in_chain
 
 
     def find_chain(self, venue_id):
-
+        """
+        Attempts to locate the chain the venue belongs to
+        """
         venue_data = self.vs.get_venue_json(venue_id)
 
         chain_id = None
+        # check we don't already know which chain it belongs to
         chain_id = self.check_chain_lookup(venue_id)
            if chain_id is None:
+                # check the venue isn't the same as any we already know about
                 chain_id = self.exact_compare_to_cache(venue_id)
                 if chain_id is None:
+                    # check the venue isn't similar to any we already know about
                     chain_id = self.fuzzy_compare_to_whole_cache(venue_id)
                     if chain_id is None:
+                        # check the venue exactly against results from a global search
                         chain_id = self.global_chain_check(venue_id)
                         if chain_id is None:
+                            # check the venue similarity against results from a global search
                             chain_id = self.fuzzy_global_chain_check(venue_id)
                             if chain_id is None:
+                                # check the venue exactly against results from a local search
                                 chain_id = self.local_chain_check(venue_id)
                                 if chain_id is None:
+                                    # check the venue similarity against results from a local search
                                     chain_id = self.fuzzy_local_chain_check(venue_id)
         return chain_id
 
-
-
-
     
     def add_to_chain(self, venue_id, chain_id):
+        """
+        Add a venue to the given chain
+        """
+        # check to see if the chain exists. If not, create it
         if self.cache.document_exists('chains', {'_id': chain_id}):
             chain_data = self.cache.get_document('chains', {'_id': chain_id})
+            # if the venue isn't already in the chain, add it
             if not venue_id in chain_data['venues']:
                 chain_data['venues'].append(venue_id)
                 self.cache.put_document('chains', chain_data)
@@ -75,6 +114,7 @@ class ChainDecider():
             chain_data = {'_id': chain_id, 'venues' = [venue_id]}
             self.cache.put_document('chains', chain_data)
 
+        # add the chain to the lookup document for the venue
         if not self.cache.document_exists('chain_id_lookup', {'_id': venue_id}):
             self.cache.put_document('chain_id_lookup', {'_id': venue_id, 'chain': chain_id})
         else:
@@ -83,9 +123,11 @@ class ChainDecider():
             self.cache.put_document('chain_id_lookup', venue_lookup)
 
 
-
     def check_chain_lookup(self, venue_id):
-
+        """
+        checks for a venue lookup document to see if the venue has already
+        been assigned to a chain
+        """
         chain_id = None
         if self.cache.document_exists('chain_id_lookup', {'_id': venue_id}):
             chain_id = self.cache.get_document('chain_id_lookup', {'_id': venue_id})['chain']
@@ -97,21 +139,28 @@ class ChainDecider():
 
     def calc_chain_distance(v1, v2):
 
+        """
+        calculates distance between two venues by comparing names, 
+        twitter handles and URLs
+        """
+        #levenshtein distance of names
         name_distance = ratio(v1['name'], v2['name'])
 
+        # compare URLs
         if v1.get('url') and v2.get('url'):
             if v1['url'] or v2['url']:
                 if v1['url'] == v2['url'] and v1['url']:
-                    url_distance = 0.5
+                    url_distance = self.u_distance
                 else:
                     url_distance = 0
             else:
                 url_distance = 0
+        # compare Twitter handles
         if v1.get('contact') and v2.get('contact'):
             if v1['contact'].get('twitter') and v2['contact'].get('twitter'):
                 if v1['contact']['twitter'] or v2['contact']['twitter']:
                     if v1['contact']['twitter'] == v2['contact']['twitter'] and v1['contact']['twitter']:
-                        twitter_distance = 0.5
+                        twitter_distance = self.t_distance
                     else:
                         twitter_distance = 0    
                 else:
@@ -152,7 +201,7 @@ class ChainDecider():
             name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
             total_distance = name_distance + url_distance + twitter_distance
 
-            if total_distance >= 0.9:
+            if total_distance >= self.sim_threshold:
                 chain_id = self.check_chain_lookup(v2['id'])
 
                 if chain_id is None:                    
@@ -187,7 +236,7 @@ class ChainDecider():
             name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
             total_distance = name_distance + url_distance + twitter_distance
 
-            if total_distance >= 0.9:
+            if total_distance >= self.sim_threshold:
                 chain_id = self.check_chain_lookup(v2['id'])
 
                 if chain_id is None:                    
@@ -203,7 +252,7 @@ class ChainDecider():
         v1 = self.vs.get_venue_json(venue_id)
 
         chain_id = None
-        local_venues = vs.local_search(v1, v1['name'], 5000)
+        local_venues = vs.local_search(v1, v1['name'], self.search_distance_m)
         for venue in local_venues:
             chain_id = self.check_chain_lookup(venue['response']['venue']['id'])
             if chain_id is not None:
@@ -215,13 +264,13 @@ class ChainDecider():
         v1 = self.vs.get_venue_json(venue_id)
 
         chain_id = None
-        local_venues = vs.local_search(v1, v1['name'], 5000)
+        local_venues = vs.local_search(v1, v1['name'], self.search_distance_m)
 
         for v2 in local_venues:
             name_distance, url_distance, twitter_distance = self.calc_chain_distance(v1, v2)
             total_distance = name_distance + url_distance + twitter_distance
 
-            if total_distance >= 0.9:
+            if total_distance >= self.sim_threshold)
                 chain_id = self.check_chain_lookup(v2['id'])
 
                 if chain_id is None:                    
@@ -230,17 +279,6 @@ class ChainDecider():
                 self.add_to_chain(v1['id'], chain_id)
                 return chain_id
         return None
-
-
-def is_chain(venue_id):
-
-    vs = VenueSearcher()
-
-    venue_data = vs.get_venue_json(venue_id)
-
-    if vs.venue_has_chain_property(venue_data):
-        return True
-
 
 
 
