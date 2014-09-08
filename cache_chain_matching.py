@@ -24,6 +24,7 @@ from category_utils import CategoryTree
 from venue_searcher import VenueSearcher
 from venue_chain_distance import calc_chain_distance, calc_venue_distance
 
+
 class CacheChainMatcher():
 
     def __init__(self, db_name='fsqexp', required_confidence=0.9):
@@ -32,6 +33,29 @@ class CacheChainMatcher():
         self.vs = VenueSearcher(db_name=db_name)
         self.cm = ChainManager(db_name=db_name)
         self.required_confidence = required_confidence
+
+        self.no_matches = []
+        self.matched = []
+
+    def add_no_match(self, venue):
+
+        # just need the venue data, not the whole API response
+        if venue.get('response'):
+            v = venue['response']['venue']
+        else:
+            v = venue
+
+        self.no_matches.append(v['id'])
+
+    def add_match(self, venue):
+
+        # just need the venue data, not the whole API response
+        if venue.get('response'):
+            v = venue['response']['venue']
+        else:
+            v = venue
+
+        self.matched.append(v['id'])      
 
     def check_chain_lookup(self, venue):
         """
@@ -149,19 +173,22 @@ class CacheChainMatcher():
                 v2 = v2['response']['venue']
             # make sure we're not comparing the venue against itself
             if v2['id'] != v1['id']:
-                # dont want to check residences or homes for chains:
-                if len(v2['categories']) > 0:
-                    category = v2['categories'][0]
-                    root_category = ct.get_root_node_for_id(category['id'])
-                    if root_category is not None and root_category['foursq_id'] != "4e67e38e036454776db1fb3a": 
-                        # make sure we're not comparing against venues from existing chains
-                        # (use 'check_existing_chains' for that)
-                        if self.check_chain_lookup(v2) is None:
-                            n_d, u_m, sm_m, cat_m = calc_venue_distance(v1, v2)
-                            # ignore cat_distance for now
-                            confidence = sum([n_d, u_m, sm_m])
-                            if confidence >= self.required_confidence:
-                                candidates[v2['id']] = confidence
+                # if v2 has been matched, exact check should have picked it up
+                # if v2 has not been matched, it's already been checked against this
+                if v2['id'] not in self.matched and v2['id'] not in self.no_matches:
+                    # dont want to check residences or homes for chains:
+                    if len(v2['categories']) > 0:
+                        category = v2['categories'][0]
+                        root_category = ct.get_root_node_for_id(category['id'])
+                        if root_category is not None and root_category['foursq_id'] != "4e67e38e036454776db1fb3a": 
+                            # make sure we're not comparing against venues from existing chains
+                            # (use 'check_existing_chains' for that)
+                            if self.check_chain_lookup(v2) is None:
+                                n_d, u_m, sm_m, cat_m = calc_venue_distance(v1, v2)
+                                # ignore cat_distance for now
+                                confidence = sum([n_d, u_m, sm_m])
+                                if confidence >= self.required_confidence:
+                                    candidates[v2['id']] = confidence
 
         # find the best match
         max_confidence = 0.0
@@ -206,9 +233,9 @@ if __name__ == '__main__':
     ccm = CacheChainMatcher()
     ct = CategoryTree()
 
-    venues = cache.get_collection('venues').find()
-    for i, venue in enumerate(venues[:50]):
-
+    venues = cache.get_collection('venues').find(timeout=False)
+    no_matching_chain = []
+    for i, venue in enumerate(venues):
         # don't want to check chains for residences and homes
         if len(venue['response']['venue']['categories']) > 0:
             category = venue['response']['venue']['categories'][0]
@@ -228,13 +255,21 @@ if __name__ == '__main__':
                             chain_id = ccm.fuzzy_compare_to_cache(venue)
                             if chain_id == None:
                                 print 'fuzzy_compare_to_cache failed'
+                                ccm.add_no_match(venue)
                             else:
                                 print 'fuzzy_compare_to_cache found chain %s' % (chain_id)
+                                ccm.add_match(venue)
                         else:
                             print 'exact_compare_to_cache found chain %s' % (chain_id)
+                            ccm.add_match(venue)
                     else:
                         print 'check_existing_chains found chain %s' % (chain_id)
+                        ccm.add_match(venue)
                 else:
                     print 'check_chain_lookup found chain: %s' % (chain_id)
+                    ccm.add_match(venue)
+        print '%d with no matches' % len(ccm.no_matches)
+        print '%d with matches' % len(ccm.matched)
+
 
     
