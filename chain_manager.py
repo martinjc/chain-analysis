@@ -116,8 +116,8 @@ class ChainManager:
                     chain['facebook'].append(venue['contact']['facebook'])
         if venue.get('categories'):
             for category in venue['categories']:
-                if not category in chain['categories']:
-                    chain['categories'].append(category)
+                if not category['id'] in chain['categories']:
+                    chain['categories'].append(category['id'])
 
         # store the updated chain
         self.cache.put_document('chains', chain)
