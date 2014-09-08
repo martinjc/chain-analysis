@@ -93,6 +93,9 @@ class ChainManager:
         if venue.get('response'):
             venue = venue['response']['venue']
 
+        # check the venue doesn't belong to a chain already
+        assert not self.cache.document_exists('chain_id_lookup', {'_id': venue['id']})
+
         # retrieve the chain document and add the venue
         chain = self.cache.get_document('chains', {'_id': chain_id})
         

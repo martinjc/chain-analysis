@@ -25,14 +25,14 @@ from venue_chain_distance import calc_chain_distance, calc_venue_distance
 
 class CacheChainMatcher():
 
-    def __init__(self, db_name='fsqexp', required_confidence=1.0):
+    def __init__(self, db_name='fsqexp', required_confidence=0.9):
 
         self.cache = MongoDBCache(db=db_name)
         self.vs = VenueSearcher(db_name=db_name)
         self.cm = ChainManager(db_name=db_name)
         self.required_confidence = required_confidence
 
-    def check_chain_lookup(self, venue_id):
+    def check_chain_lookup(self, venue):
         """
         checks for a venue lookup document to see if the venue has already
         been assigned to a chain
@@ -66,19 +66,22 @@ class CacheChainMatcher():
 
         # compute how well the venue matches the chain
         for chain in chains:
-            confidence = sum(compute_confidence(v, chain['_id']))
-            candidates[chain['_id']] = confidence
+            a_r, u_c, sm_c, cat_c = self.compute_confidence(v, chain['_id'])
+            # ignore category confidence for now
+            confidence = sum([a_r, u_c, sm_c])
+            if confidence >= self.required_confidence:
+                candidates[chain['_id']] = confidence
 
         # find the best match
         max_confidence = 0.0
         best_chain = None
         for chain_id, confidence in candidates.iteritems():
-            if confidence > max_confidence:
+            if confidence >= max_confidence:
                 max_confidence = confidence
                 best_chain = chain_id
 
         # if a match is found and confidence is high enough, return the chain_id
-        if best_chain is not None and max_confidence > self.required_confidence:
+        if best_chain is not None and max_confidence >= self.required_confidence:
             self.cm.add_to_chain(best_chain, v, max_confidence)
             return best_chain
         else:
@@ -111,7 +114,7 @@ class CacheChainMatcher():
             v = venue
 
         # first, look for exact matches
-        query = {'response.venue.name': venue['name']}
+        query = {'response.venue.name': v['name']}
 
         # check the cache based on query
         venues = self.cache.get_documents('venues', query)
@@ -122,34 +125,48 @@ class CacheChainMatcher():
         for venue in venues:
             chain_id = self.check_chain_lookup(venue)
             if chain_id is not None:
-                chains.append(self.cache.get_document('chains' {'_id': chain_id}))
+                chains.append(self.cache.get_document('chains', {'_id': chain_id}))
 
         return self.find_best_chain(venue, chains)
 
 
     def fuzzy_compare_to_cache(self, venue):
 
-        v1 = self.vs.get_venue_json(venue_id)['response']['venue']
+        # just need the venue data, not the whole API response
+        if venue.get('response'):
+            v = venue['response']['venue']
+        else:
+            v = venue
+
+        v1 = self.vs.get_venue_json(v['id'])
 
         candidates = {}
 
+        # look at all the other venues
         for v2 in self.cache.get_collection('venues').find():
-            v2 = v2['response']['venue']
+            if v2.get('response'):
+                v2 = v2['response']['venue']
+            # make sure we're not comparing the venue against itself
             if v2['id'] != v1['id']:
-
-                distance = sum(calc_venue_distance(v1, v2))
-                candidates[v2['id']] = confidence
+                # make sure we're not comparing against venues from existing chains
+                # (use 'check_existing_chains' for that)
+                if self.check_chain_lookup(v2) is None:
+                    n_d, u_m, sm_m, cat_m = calc_venue_distance(v1, v2)
+                    # ignore cat_distance for now
+                    confidence = sum([n_d, u_m, sm_m])
+                    if confidence >= self.required_confidence:
+                        candidates[v2['id']] = confidence
 
         # find the best match
         max_confidence = 0.0
         best_match = None
         for v2, confidence in candidates.iteritems():
-            if confidence > max_confidence:
+            if confidence >= max_confidence:
                 max_confidence = confidence
                 best_match = v2
 
         # if we have a good match
-        if best_match is not None and max_confidence > self.required_confidence:
+        if best_match is not None and max_confidence >= self.required_confidence:
             v2 = self.vs.get_venue_json(best_match)
             # check to see if there's a chain already
             chain_id = self.check_chain_lookup(v2)
@@ -177,7 +194,34 @@ class CacheChainMatcher():
 
         return calc_chain_distance(v, chain)
 
-
-
 if __name__ == '__main__':
+    
+    cache = MongoDBCache(db='fsqexp')
+    ccm = CacheChainMatcher()
+
+    venues = cache.get_collection('venues').find()
+    for i, venue in enumerate(venues[:10]):
+        chain_id = None
+        print '%d: %s' % (i, venue['response']['venue']['name'])
+        chain_id = ccm.check_chain_lookup(venue)
+        if chain_id == None:
+            print 'check_chain_lookup failed'
+            chain_id = ccm.check_existing_chains(venue)
+            if chain_id == None:
+                print 'check_existing_chains failed'
+                chain_id = ccm.exact_compare_to_cache(venue)
+                if chain_id == None:
+                    print 'exact_compare_to_cache failed'
+                    chain_id = ccm.fuzzy_compare_to_cache(venue)
+                    if chain_id == None:
+                        print 'fuzzy_compare_to_cache failed'
+                    else:
+                        print 'fuzzy_compare_to_cache found chain %s' % (chain_id)
+                else:
+                    print 'exact_compare_to_cache found chain %s' % (chain_id)
+            else:
+                print 'check_existing_chains found chain %s' % (chain_id)
+        else:
+            print 'check_chain_lookup found chain: %s' % (chain_id)
+
     
