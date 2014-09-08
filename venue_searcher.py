@@ -26,7 +26,7 @@ from api import APIGateway, APIWrapper
 
 class VenueSearcher:
 
-    def __init__(self):
+    def __init__(self, db_name='foursq'):
         
         self.gateway = APIGateway(access_token, 500, [client_id, client_secret], 5000)
         self.wrapper = APIWrapper(self.gateway)
@@ -35,7 +35,7 @@ class VenueSearcher:
             'v' : 20140713
         }
 
-        self.cache = MongoDBCache(db='fsqexp')
+        self.cache = MongoDBCache(db=db_name)
 
 
     def venue_has_chain_property(self, venue):
