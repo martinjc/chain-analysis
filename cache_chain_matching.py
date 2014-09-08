@@ -33,9 +33,82 @@ class CacheChainMatcher():
         self.vs = VenueSearcher(db_name=db_name)
         self.cm = ChainManager(db_name=db_name)
         self.required_confidence = required_confidence
+        self.ct = CategoryTree()
 
         self.no_matches = []
         self.matched = []
+
+        vs = self.cache.get_collection('venues').find(timeout=False)
+        self.venues = []
+        for v in vs:
+            # dont want to check residences or homes for chains:
+            if len(v['response']['venue']['categories']) > 0:
+                category = v['response']['venue']['categories'][0]
+                root_category = self.ct.get_root_node_for_id(category['id'])
+                if root_category is not None and root_category['foursq_id'] != "4e67e38e036454776db1fb3a": 
+                    venue = {}
+                    venue['id'] = v['response']['venue']['id']
+                    venue['name'] = v['response']['venue']['name']
+                    if v.get('url'):
+                        venue['url'] = urlparse(v['url']).netloc
+                    if v.get('contact'):
+                        venue['contact'] = {}
+                        if v['contact'].get('twitter'):
+                            if v['contact']['twitter'] != 'none':
+                                venue['contact']['twitter'] = v['contact']['twitter']
+                        if v['contact'].get('facebook'):
+                            venue['contact']['facebook'] = v['contact']['facebook']
+                    if v.get('categories'):
+                        venue['categories'] = v['categories']
+                    self.venues.append(venue)
+
+        print('done init()')
+
+    def calc_venue_distance(self, venue1, venue2):
+
+        """
+        calculates distance between two venues by comparing names, 
+        social media handles, URLs and categories
+        """
+
+        # just need the venue data, not the whole API response
+        if venue1.get('response'):
+            v1 = venue1['response']['venue']
+        else:
+            v1 = venue1
+        if venue2.get('response'):
+            v2 = venue2['response']['venue']
+        else:
+            v2 = venue2
+
+        #levenshtein distance of names
+        name_distance = ratio(v1['name'], v2['name'])
+        url_match = 0.0
+        social_media_match = 0.0
+        category_match = 0.0
+
+        # compare URLs
+        if v1.get('url') and v2.get('url'):
+            if v1['url'] == v2['url']:
+                url_match = 1.0
+
+        # compare social media
+        if v1.get('contact') and v2.get('contact'):
+            if v1['contact'].get('twitter') and v2['contact'].get('twitter'):
+                if v1['contact']['twitter'] == v2['contact']['twitter'] and v1['contact']['twitter'] and v1['contact']['twitter'] != "none":
+                    social_media_match += 1.0
+            if v1['contact'].get('facebook') and v2['contact'].get('facebook'):
+                if v1['contact']['facebook'] == v2['contact']['facebook'] and v1['contact']['facebook'] and v1['contact']['facebook'] != "none":
+                    social_media_match += 1.0
+
+        # compare categories
+        if v1.get('categories') and v2.get('categories'):
+            for category1 in v1['categories']:
+                for category2 in v2['categories']:
+                    if category1['id'] == category2['id']:
+                        category_match += 1.0
+
+        return name_distance, url_match, social_media_match, category_match
 
     def add_no_match(self, venue):
 
@@ -168,27 +241,20 @@ class CacheChainMatcher():
         candidates = {}
 
         # look at all the other venues
-        for v2 in self.cache.get_collection('venues').find():
-            if v2.get('response'):
-                v2 = v2['response']['venue']
+        for v2 in self.venues:
             # make sure we're not comparing the venue against itself
-            if v2['id'] != v1['id']:
+            if v2 != v1['id']:
                 # if v2 has been matched, exact check should have picked it up
                 # if v2 has not been matched, it's already been checked against this
-                if v2['id'] not in self.matched and v2['id'] not in self.no_matches:
-                    # dont want to check residences or homes for chains:
-                    if len(v2['categories']) > 0:
-                        category = v2['categories'][0]
-                        root_category = ct.get_root_node_for_id(category['id'])
-                        if root_category is not None and root_category['foursq_id'] != "4e67e38e036454776db1fb3a": 
-                            # make sure we're not comparing against venues from existing chains
-                            # (use 'check_existing_chains' for that)
-                            if self.check_chain_lookup(v2) is None:
-                                n_d, u_m, sm_m, cat_m = calc_venue_distance(v1, v2)
-                                # ignore cat_distance for now
-                                confidence = sum([n_d, u_m, sm_m])
-                                if confidence >= self.required_confidence:
-                                    candidates[v2['id']] = confidence
+                if v2 not in self.matched and v2 not in self.no_matches:
+                    # make sure we're not comparing against venues from existing chains
+                    # (use 'check_existing_chains' for that)
+                    if not self.cache.document_exists('chain_id_lookup', {'_id': v2}):
+                        n_d, u_m, sm_m, cat_m = self.calc_venue_distance(v1, v2)
+                        # ignore cat_distance for now
+                        confidence = sum([n_d, u_m, sm_m])
+                        if confidence >= self.required_confidence:
+                            candidates[v2['id']] = confidence
 
         # find the best match
         max_confidence = 0.0
@@ -233,16 +299,14 @@ if __name__ == '__main__':
     ccm = CacheChainMatcher()
     ct = CategoryTree()
 
-    venues = cache.get_collection('venues').find(timeout=False)
-    no_matching_chain = []
-    for i, venue in enumerate(venues):
+    for i, venue in enumerate(ccm.venues):
         # don't want to check chains for residences and homes
-        if len(venue['response']['venue']['categories']) > 0:
-            category = venue['response']['venue']['categories'][0]
+        if len(venue['categories']) > 0:
+            category = venue['categories'][0]
             root_category = ct.get_root_node_for_id(category['id'])
             if root_category['foursq_id'] != "4e67e38e036454776db1fb3a":      
                 chain_id = None
-                print '%d: %s' % (i, venue['response']['venue']['name'])
+                print '%d: %s' % (i, venue['name'])
                 chain_id = ccm.check_chain_lookup(venue)
                 if chain_id == None:
                     print 'check_chain_lookup failed'
