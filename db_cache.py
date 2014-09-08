@@ -26,7 +26,7 @@ from datetime import timedelta, datetime
 
 class MongoDBCache(object):
 
-    def __init__(self, mongo_db='mongodb://localhost:27017/', db='test', refresh_time=timedelta(days=1)):
+    def __init__(self, mongo_db='mongodb://localhost:27017/', db='test', refresh_time=timedelta(days=365)):
 
         self.client = MongoClient(mongo_db)
         self.db = self.client[db]
@@ -48,11 +48,11 @@ class MongoDBCache(object):
             if check_fresh:
                 # check item freshness
                 if item.get('last_modified'):
-                    refresh_time = datetime.now() - self.refresh_time
+                    last_refresh_time = datetime.now() - self.refresh_time
                     last_modified = datetime.fromtimestamp(item['last_modified'])
 
                     # item is stale
-                    if last_modified < refresh_time:
+                    if last_modified < last_refresh_time:
                         return False
                     # item is fresh
                     else:

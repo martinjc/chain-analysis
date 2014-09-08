@@ -35,7 +35,7 @@ class VenueSearcher:
             'v' : 20140713
         }
 
-        self.cache = MongoDBCache(db='foursq')
+        self.cache = MongoDBCache(db='fsqexp')
 
 
     def venue_has_chain_property(self, venue):
@@ -46,7 +46,7 @@ class VenueSearcher:
         return False
 
 
-    def global_search(self, query):
+    def global_search(self, query, check_fresh=False):
 
         params = {}
         params['v'] = self.params['v']
@@ -55,8 +55,8 @@ class VenueSearcher:
         params['query'] = query
         
 
-        if self.cache.document_exists('global_searches', {'params': params}, True):
-            results = self.cache.get_document('global_searches', {'params': params}, True)
+        if self.cache.document_exists('global_searches', {'params': params}, check_fresh):
+            results = self.cache.get_document('global_searches', {'params': params}, check_fresh)
             return results['response']['venues']
         else:
             try:
@@ -71,7 +71,7 @@ class VenueSearcher:
                 pass
 
 
-    def local_search(self, venue, query, radius):
+    def local_search(self, venue, query, radius, check_fresh=False):
 
         lat = venue['location']['lat']
         lng = venue['location']['lng']
@@ -87,8 +87,8 @@ class VenueSearcher:
         params['categoryId'] = categories
         params['query'] = query
 
-        if self.cache.document_exists('local_searches', {'params': params}, True):
-            results = self.cache.get_document('local_searches', {'params': params}, True)
+        if self.cache.document_exists('local_searches', {'params': params}, check_fresh):
+            results = self.cache.get_document('local_searches', {'params': params}, check_fresh)
             return results['response']['venues']
         else:
             try:
@@ -103,7 +103,7 @@ class VenueSearcher:
                 pass
 
 
-    def get_venue_json(self, venue_id, check_fresh=True):
+    def get_venue_json(self, venue_id, check_fresh=False):
 
         if self.cache.document_exists('venues', {'_id': '%s' % (venue_id)}, check_fresh):
             response = self.cache.get_document('venues', {'_id': '%s' % (venue_id)}, check_fresh)
@@ -121,7 +121,7 @@ class VenueSearcher:
         return response['response']['venue']
 
 
-    def search_alternates(self, venue, radius=500):
+    def search_alternates(self, venue, radius=500, check_fresh=False):
 
         lat = venue['location']['lat']
         lng = venue['location']['lng']
@@ -136,8 +136,8 @@ class VenueSearcher:
         params['limit'] = 50
         params['categoryId'] = categories
 
-        if self.cache.document_exists('alternates', {'params': params}, True):
-            alternatives = self.cache.get_document('alternates', {'params': params}, True)
+        if self.cache.document_exists('alternates', {'params': params}, check_fresh):
+            alternatives = self.cache.get_document('alternates', {'params': params}, check_fresh)
             return alternatives['response']['venues']
         else:
             try:

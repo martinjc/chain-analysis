@@ -72,7 +72,7 @@ class ChainDecider():
         print chain_id
 
         # if no chain but is chain according to foursquare, create a new one
-        if chain_id is None and vs.venue_has_chain_property(venue_data):
+        if chain_id is None and self.vs.venue_has_chain_property(venue_data):
             chain_id = uuid.uuid4().hex
             self.add_to_chain(venu_data['id'], chain_id)
             return True, chain_id, 1
@@ -328,10 +328,12 @@ if __name__ == "__main__":
     mcdonalds = '4b6d80baf964a520b8782ce3'
     tesco = '4c14b6aea1010f479fd94c18'
     costa = '4db656b50cb6729b6ab71531'
+    lounge = '4b058838f964a52016b922e3'
 
     cd = ChainDecider()
     print "northcliffe: %s,%s,%s" % (cd.is_chain(northcliffe))
     print "starbucks1: %s,%s,%s" % (cd.is_chain(starbucks1))
+    print "lounge: %s,%s,%s" % (cd.is_chain(lounge))
     #print "tesco: %s,%s,%s" % (cd.is_chain(tesco))
     #print "mcdonalds: %s,%s,%s" % (cd.is_chain(mcdonalds))
     #print "costa: %s,%s,%s" % (cd.is_chain(costa))
