@@ -26,7 +26,7 @@ from api import APIGateway, APIWrapper
 
 class VenueSearcher:
 
-    def __init__(self, db_name='foursq'):
+    def __init__(self, db_name='fsqexp'):
         
         self.gateway = APIGateway(access_token, 500, [client_id, client_secret], 5000)
         self.wrapper = APIWrapper(self.gateway)

@@ -31,9 +31,9 @@ class ChainManager:
         * Delete a chain
     """
 
-    def __init__(self):
+    def __init__(self, db_name='fsqexp'):
 
-        self.cache = MongoDBCache(db='fsqexp')
+        self.cache = MongoDBCache(db=db_name)
 
 
     def create_chain(self, venue1, venue2, confidence):
@@ -76,6 +76,8 @@ class ChainManager:
         # add each venue to the new chain
         for venue in [v1, v2]:
             self.add_to_chain(chain_id, venue, confidence)
+
+        return chain_id
         
 
     def add_to_chain(self, chain_id, venue, confidence):

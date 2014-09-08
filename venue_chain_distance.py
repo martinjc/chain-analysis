@@ -20,24 +20,23 @@ def calc_venue_distance(venue1, venue2):
 
     #levenshtein distance of names
     name_distance = ratio(v1['name'], v2['name'])
-    url_match = False
-    twitter_match = False
-    facebook_match = False
+    url_match = 0.0
+    social_media_match = 0.0
     category_match = 0.0
 
     # compare URLs
     if v1.get('url') and v2.get('url'):
         if urlparse(v1['url']).netloc == urlparse(v2['url']).netloc and v1['url']:
-            url_match = True
+            url_match = 1.0
 
     # compare social media
     if v1.get('contact') and v2.get('contact'):
         if v1['contact'].get('twitter') and v2['contact'].get('twitter'):
             if v1['contact']['twitter'] == v2['contact']['twitter'] and v1['contact']['twitter']:
-                twitter_match = True
+                social_media_match += 1.0
         if v1['contact'].get('facebook') and v2['contact'].get('facebook'):
             if v1['contact']['facebook'] == v2['contact']['facebook'] and v1['contact']['facebook']:
-                facebook_match = True
+                social_media_match += 1.0
 
     # compare categories
     if v1.get('categories') and v2.get('categories'):
@@ -46,7 +45,7 @@ def calc_venue_distance(venue1, venue2):
                 if category1['id'] == category2['id']:
                     category_match += 1.0
 
-    return name_distance, url_match, twitter_match, facebook_match, category_match
+    return name_distance, url_match, social_media_match, category_match
 
 
 def calc_chain_distance(venue, chain):
@@ -71,11 +70,11 @@ def calc_chain_distance(venue, chain):
             if v['contact'].get('twitter'):
                 twitter = v['contact']['twitter']
                 if twitter in chain['twitter']:
-                    social_media_confidence = 1.0
+                    social_media_confidence += 1.0
             if v['contact'].get('facebook'):
                 facebook = v['contact']['facebook']
                 if facebook in chain['facebook']:
-                    social_media_confidence = 1.0
+                    social_media_confidence += 1.0
 
         # check category matches
         categories_confidence = 0.0
