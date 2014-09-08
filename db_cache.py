@@ -86,5 +86,10 @@ class MongoDBCache(object):
         return self.db[collection]
 
 
+    def remove_document(self, collection, query):
+        assert self.document_exists(collection, query, False)
+        return self.db[collection].remove(query)
+
+
 
         
