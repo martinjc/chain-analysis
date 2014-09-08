@@ -16,11 +16,8 @@
 
 import uuid
 
-from Levenshtein import ratio
 from urlparse import urlparse
 from db_cache import MongoDBCache
-from collections import defaultdict
-from category_utils import CategoryTree
 
 class ChainManager:
     """
@@ -46,8 +43,14 @@ class ChainManager:
         """
 
         # just need the venue data, not the whole API response
-        v1 = venue1['response']['venue']
-        v2 = venue2['response']['venue']
+        if venue1.get('response'):
+            v1 = venue1['response']['venue']
+        else:
+            v1 = venue1
+        if venue2.get('response'):
+            v2 = venue2['response']['venue']
+        else:
+            v2 = venue2
 
         # check we have two different venues and that neither already belongs to a chain
         assert v1['id'] != v2['id']
@@ -59,13 +62,13 @@ class ChainManager:
 
         # create a new Chain object
         chain = {'_id': chain_id,
-                'venues': set(),
-                'names': set(),
+                'venues': [],
+                'names': [],
                 'confidences': {},
-                'categories': set(),
-                'urls': set(),
-                'twitter': set(),
-                'facebook': set()}
+                'categories': [],
+                'urls': [],
+                'twitter': [],
+                'facebook': []}
 
         # store the new Chain object
         self.cache.put_document('chains', chain)
@@ -90,22 +93,37 @@ class ChainManager:
 
         # retrieve the chain document and add the venue
         chain = self.cache.get_document('chains', {'_id': chain_id})
-        chain['venues'].add(venue['id'])
-        chain['names'].add(venue['name'])
+        
+        venues = set(chain['venues'])
+        venues.add(venue['id'])
+        chain['venues'] = list(venues)
+        
+        names = set(chain['names'])
+        names.add(venue['name'])
+        chain['names'] = list(names)
+
         chain['confidences'][venue['id']] = confidence
 
         # add any extra details
         if venue.get('url'):
             venue_url = urlparse(venue['url']).netloc
-            chain['urls'].add(venue_url)
+            urls = set(chain['urls'])
+            urls.add(venue_url)
+            chain['urls'] = list(urls)
         if venue.get('contact'):
             if venue['contact'].get('twitter'):
-                chain['twitter'].add(venue['contact']['twitter'])
+                twitter = set(chain['twitter'])
+                twitter.add(venue['contact']['twitter'])
+                chain['twitter'] = list(twitter)
             if venue['contact'].get('facebook'):
-                chain['facebook'].add(venue['contact']['facebook'])
+                facebook = set(chain['facebook'])
+                facebook.add(venue['contact']['facebook'])
+                chain['facebook'] = list(facebook)
         if venue.get('categories'):
             for category in venue['categories']:
-                chain['categories'].add(category['id'])
+                categories = set(chain['categories'])
+                categories.add(category['id'])
+                chain['categories'] = list(categories)
 
         # store the updated chain
         self.cache.put_document('chains', chain)
@@ -144,8 +162,8 @@ class ChainManager:
         # construct the chain data without contributions from venue to be removed
         for v in chain['venues']:
             if v != venue['id']:
-                v_data = self.cache.get_document('venues', {'_id': v})
-                names.add(v_data)
+                v_data = self.cache.get_document('venues', {'_id': v})['response']['venue']
+                names.add(v_data['name'])
                 if v_data.get('url'):
                     venue_url = urlparse(v_data['url']).netloc
                     urls.add(venue_url)
@@ -161,11 +179,11 @@ class ChainManager:
         # replace the chain data
         del chain['confidences'][venue['id']]
         chain['venues'].remove(venue['id'])
-        chain['names'] = names
-        chain['urls'] = urls
-        chain['twitter'] = twitter
-        chain['facebook'] = facebook
-        chain['categories'] = categories
+        chain['names'] = list(names)
+        chain['urls'] = list(urls)
+        chain['twitter'] = list(twitter)
+        chain['facebook'] = list(facebook)
+        chain['categories'] = list(categories)
 
         # store the updated chain
         self.cache.put_document('chains', chain)
@@ -184,7 +202,7 @@ class ChainManager:
         # remove all the chain lookups
         for v in chain['venues']:
             # remove the inverse lookup
-            self.cache.remove_document('chain_id_lookup', {'_id': venue['id']})
+            self.cache.remove_document('chain_id_lookup', {'_id': v})
 
         # remove the chain
         self.cache.remove_document('chains', {'_id': chain_id})
