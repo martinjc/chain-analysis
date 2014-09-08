@@ -24,14 +24,14 @@ from category_utils import CategoryTree
 
 class ChainManager:
     """
-    ChainManager is responsible for handling all chain operations. It uses the MongoDB
+    ChainManager is responsible for handling all chain operations. It uses the cache
     backend to:
 
-        1. Create a new chain
-        2. Add a venue to a chain
-        3. Merge two chains together
-        4. Remove a venue from a chain
-        5. Delete a chain
+        * Create a new chain
+        * Add a venue to a chain
+        * Merge two chains together
+        * Remove a venue from a chain
+        * Delete a chain
     """
 
     def __init__(self):
@@ -189,6 +189,6 @@ class ChainManager:
         # remove the chain
         self.cache.remove_document('chains', {'_id': chain_id})
 
-        
+
     def merge_chains(self, chain1_id, chain2_id):
         pass
