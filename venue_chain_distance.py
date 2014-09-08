@@ -32,10 +32,10 @@ def calc_venue_distance(venue1, venue2):
     # compare social media
     if v1.get('contact') and v2.get('contact'):
         if v1['contact'].get('twitter') and v2['contact'].get('twitter'):
-            if v1['contact']['twitter'] == v2['contact']['twitter'] and v1['contact']['twitter']:
+            if v1['contact']['twitter'] == v2['contact']['twitter'] and v1['contact']['twitter'] and v1['contact']['twitter'] != "none":
                 social_media_match += 1.0
         if v1['contact'].get('facebook') and v2['contact'].get('facebook'):
-            if v1['contact']['facebook'] == v2['contact']['facebook'] and v1['contact']['facebook']:
+            if v1['contact']['facebook'] == v2['contact']['facebook'] and v1['contact']['facebook'] and v1['contact']['facebook'] != "none":
                 social_media_match += 1.0
 
     # compare categories
