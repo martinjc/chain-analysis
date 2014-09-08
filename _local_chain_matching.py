@@ -22,7 +22,7 @@ from db_cache import MongoDBCache
 from collections import defaultdict
 from category_utils import CategoryTree
 
-chains = defaultdict(set)
+chains = {}
 chain_id_lookup = {}
 
 
@@ -36,7 +36,7 @@ class AlreadyChainedError(RuntimeError) :
         return 'Venue \'%s\' already in chain \'%s\'' % (self.venue_id, self.chain_id)
 
 
-def add_chain(venue):
+def add_chain(venue, confidence):
     """
     Add a new chain to the collection. A Chain object stores the venue_ids and 
     potential venue details of members of the Chain.
@@ -56,6 +56,10 @@ def add_chain(venue):
             'venues': set([venue_data['id']]),
             'names': set([venue_data['name']])}
 
+    # how sure are we that this venue is part of the chain?
+    confidences = {venue_data['id']: confidence}
+    chain['confidences'] = confidences
+
     # add any details if present
     if venue_data.get('url'):
         venue_url = urlparse(venue_data['url']).netloc
@@ -68,18 +72,28 @@ def add_chain(venue):
         for category in venue_data['categories']:
             chain['categories'].add(category['id'])
 
+    # add the chain to the collection of chains
     chains[chain_id].add(chain)
+
+    # add a reverse lookup for the venue
     chain_id_lookup[venue_data['id']] = chain_id
 
 
-def add_to_chain(chain_id, venue):
+def add_to_chain(chain_id, venue, confidence):
 
     venue_data = venue['response']['venue']
 
+    # get the Chain object
     chain = chains[chain_id]
+
+    # add venue name and id
     chain['venues'].add(venue_data['id'])
     chain['names'].add(venue_data['name'])
 
+    # add our confidence value that this venue belongs to this chain
+    chain['confidences'][venue_data['id']] = confidence
+    
+    # add any additional details if present
     if venue_data.get('url'):
         venue_url = urlparse(venue_data['url']).netloc
         chain['urls'].add(venue_url)
