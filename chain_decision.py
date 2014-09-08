@@ -22,14 +22,6 @@ from db_cache import MongoDBCache
 from category_utils import CategoryTree
 
 
-class ChainNotFoundError(RuntimeError):
-    def __init__(self, venue_id):
-        self.venue_id = venue_id
-        
-    def __str__( self ):
-        return "Chain not found for venue: %s" % ( self.venue_id )
-
-
 class ChainDecider():
 
 
