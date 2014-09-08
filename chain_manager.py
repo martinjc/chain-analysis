@@ -94,36 +94,30 @@ class ChainManager:
         # retrieve the chain document and add the venue
         chain = self.cache.get_document('chains', {'_id': chain_id})
         
-        venues = set(chain['venues'])
-        venues.add(venue['id'])
-        chain['venues'] = list(venues)
+        if venue['id'] not in chain['venues']:
+            chain['venues'].append(venue['id'])
         
-        names = set(chain['names'])
-        names.add(venue['name'])
-        chain['names'] = list(names)
-
+        if venue['name'] not in chain['names']:
+            chain['names'].append(venue['name'])
+        
         chain['confidences'][venue['id']] = confidence
 
         # add any extra details
         if venue.get('url'):
             venue_url = urlparse(venue['url']).netloc
-            urls = set(chain['urls'])
-            urls.add(venue_url)
-            chain['urls'] = list(urls)
+            if not venue['url'] in chain['urls']:
+                chain['urls'].append(venue['url'])
         if venue.get('contact'):
             if venue['contact'].get('twitter'):
-                twitter = set(chain['twitter'])
-                twitter.add(venue['contact']['twitter'])
-                chain['twitter'] = list(twitter)
+                if not venue['contact']['twitter'] in chain['twitter']:
+                    chain['twitter'].append(venue['contact']['twitter'])
             if venue['contact'].get('facebook'):
-                facebook = set(chain['facebook'])
-                facebook.add(venue['contact']['facebook'])
-                chain['facebook'] = list(facebook)
+                if not venue['contact']['facebook'] in chain['facebook']:
+                    chain['facebook'].append(venue['contact']['facebook'])
         if venue.get('categories'):
             for category in venue['categories']:
-                categories = set(chain['categories'])
-                categories.add(category['id'])
-                chain['categories'] = list(categories)
+                if not category in chain['categories']:
+                    chain['categories'].append(category)
 
         # store the updated chain
         self.cache.put_document('chains', chain)
