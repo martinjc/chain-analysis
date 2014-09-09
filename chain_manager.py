@@ -71,6 +71,7 @@ class ChainManager:
                 'facebook': []}
 
         # store the new Chain object
+        print 'CM: created new chain: %s' % (chain_id)
         self.cache.put_document('chains', chain)
 
         # add each venue to the new chain
@@ -132,6 +133,8 @@ class ChainManager:
                 'chain_id': chain_id,
                 'confidence': confidence}
         self.cache.put_document('chain_id_lookup', data)
+
+        print 'CM: added %s to chain %s' % (venue['id'], chain_id)
 
 
     def remove_from_chain(self, chain_id, venue):
