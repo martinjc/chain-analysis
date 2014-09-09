@@ -1,4 +1,7 @@
-def calc_chain_distance(venue, chain):
+from Levenshtein import ratio
+from urlparse import urlparse
+
+def calc_chain_confidence(venue, chain):
 
     # just need the venue data, not the whole API response
     if venue.get('response'):
@@ -40,3 +43,24 @@ def calc_chain_distance(venue, chain):
                 categories_confidence += 1.0
 
     return average_ratio, url_confidence, social_media_confidence, categories_confidence
+
+
+def find_best_chain_match(venue, candidate_chains):
+
+    # just need the venue data, not the whole API response
+    if venue.get('response'):
+        v = venue['response']['venue']
+    else:
+        v = venue
+
+    max_confidence = 0.0
+    best_match = None
+    
+    for candidate in candidate_chains:
+        confidence = sum([calc_chain_confidence(v, candidate)])
+        if confidence > max_confidence:
+            max_confidence = confidence
+            best_match = candidate
+
+    return best_match, max_confidence
+

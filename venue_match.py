@@ -38,17 +38,24 @@ def calc_venue_match_confidence(venue1, venue2):
             if v1['contact']['facebook'] == v2['contact']['facebook'] and v1['contact']['facebook'] and v1['contact']['facebook'] != "none":
                 social_media_match += 1.0
 
-    # compare categories
+    # compare categories - match = +1.0, - no match = -1.0
+    c1 = set()
+    c2 = set()
     if v1.get('categories') and v2.get('categories'):
-        for category1 in v1['categories']:
-            for category2 in v2['categories']:
-                if category1['id'] == category2['id']:
-                    category_match += 1.0
+        for category in v1['categories']:
+            c1.add(category['id'])
+        for category in v2['categories']:
+            c2.add(category['id'])
+    common = c1 & c2
+    if len(common) > 0:
+        category_match = 1.0
+    else:
+        category_match = -1.0
 
     return name_distance, url_match, social_media_match, category_match
 
 
-def find_best_match(venue, candidate_venues):
+def find_best_venue_match(venue, candidate_venues):
 
     # just need the venue data, not the whole API response
     if venue.get('response'):
@@ -65,7 +72,7 @@ def find_best_match(venue, candidate_venues):
         else:
             c = candidate
 
-            confidence = calc_venue_match_confidence(v, c)
+            confidence = sum([calc_venue_match_confidence(v, c)])
             if confidence > max_confidence:
                 max_confidence = confidence
                 best_match = c
