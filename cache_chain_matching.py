@@ -22,7 +22,7 @@ from db_cache import MongoDBCache
 from chain_manager import ChainManager
 from category_utils import CategoryTree
 from venue_searcher import VenueSearcher
-from venue_chain_distance import calc_chain_distance, calc_venue_distance
+from venue_chain_distance import calc_chain_distance
 
 
 class CacheChainMatcher():
@@ -38,33 +38,62 @@ class CacheChainMatcher():
         self.no_matches = []
         self.matched = []
 
-        vs = self.cache.get_collection('venues').find(timeout=False)
-        self.venues = []
-        for v in vs:
-            # dont want to check residences or homes for chains:
-            if len(v['response']['venue']['categories']) > 0:
-                category = v['response']['venue']['categories'][0]
-                root_category = self.ct.get_root_node_for_id(category['id'])
-                if root_category is not None and root_category['foursq_id'] != "4e67e38e036454776db1fb3a": 
-                    venue = {}
-                    venue['id'] = v['response']['venue']['id']
-                    venue['name'] = v['response']['venue']['name']
-                    if v.get('url'):
-                        venue['url'] = urlparse(v['url']).netloc
-                    if v.get('contact'):
-                        venue['contact'] = {}
-                        if v['contact'].get('twitter'):
-                            if v['contact']['twitter'] != 'none':
-                                venue['contact']['twitter'] = v['contact']['twitter']
-                        if v['contact'].get('facebook'):
-                            venue['contact']['facebook'] = v['contact']['facebook']
-                    if v.get('categories'):
-                        venue['categories'] = v['categories']
-                    self.venues.append(venue)
+        self.venues = self.extract_venue_information()
 
         print('done init()')
 
-    def calc_venue_distance(self, venue1, venue2):
+
+    def extract_venue_information(self):
+
+        venues = []
+        # get all the venues from the database
+        db_venues = self.cache.get_collection('venues').find(timeout=False)
+        
+        # extract information needed for comparison
+        for v in db_venues:
+            # just work with venue information instead of whole response
+            if v.get('response'):
+                v = v['response']['venue']
+
+            venue = {}
+            venue['id'] = v['id']
+            venue['name'] = v['name']
+            # check for url
+            if v.get('url'):
+                # parse url now
+                venue['url'] = urlparse(v['url']).netloc
+            # check for social media info
+            if v.get('contact'):
+                venue['contact'] = {}
+                if v['contact'].get('twitter'):
+                    if v['contact']['twitter'] != 'none':
+                        venue['contact']['twitter'] = v['contact']['twitter']
+                if v['contact'].get('facebook'):
+                    venue['contact']['facebook'] = v['contact']['facebook']
+            # copy any categories
+            venue['categories'] = []            
+            if v.get('categories'):
+                venue['categories'] = v['categories']
+
+            # don't include homes or residences
+            if v.get('categories'):
+                if len(v['categories']) > 0:
+                    # check the first (primary) category
+                    root_category = self.ct.get_root_node_for_id(v['categories'][0]['id'])
+                    # if the root is not 'Homes and Residences'
+                    if root_category is not None and root_category['foursq_id'] != "4e67e38e036454776db1fb3a":
+                        venues.append(venue)
+                # add venues with no categories
+                else:
+                    venues.append(venue)
+            # add venues with no categories
+            else:
+                venues.append(venue)
+
+        return venues
+
+
+    def calc_venue_match_confidence(self, venue1, venue2):
 
         """
         calculates distance between two venues by comparing names, 
@@ -110,6 +139,7 @@ class CacheChainMatcher():
 
         return name_distance, url_match, social_media_match, category_match
 
+
     def add_no_match(self, venue):
 
         # just need the venue data, not the whole API response
@@ -119,6 +149,7 @@ class CacheChainMatcher():
             v = venue
 
         self.no_matches.append(v['id'])
+
 
     def add_match(self, venue):
 
@@ -130,22 +161,17 @@ class CacheChainMatcher():
 
         self.matched.append(v['id'])      
 
+
     def check_chain_lookup(self, venue):
         """
-        checks for a venue lookup document to see if the venue has already
+        Checks for a venue lookup document to see if the venue has already
         been assigned to a chain
         """
 
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            v = venue['response']['venue']
-        else:
-            v = venue
-
         chain_id = None
 
-        if self.cache.document_exists('chain_id_lookup', {'_id': v['id']}):
-            chain_id = self.cache.get_document('chain_id_lookup', {'_id': v['id']})['chain_id']
+        if self.cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
+            chain_id = self.cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id']
 
         return chain_id
 
@@ -154,17 +180,12 @@ class CacheChainMatcher():
         """
         Search a list of chains for the best match for this venue.
         """
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            v = venue['response']['venue']
-        else:
-            v = venue
 
         candidates = {}
 
         # compute how well the venue matches the chain
         for chain in chains:
-            a_r, u_c, sm_c, cat_c = self.compute_confidence(v, chain['_id'])
+            a_r, u_c, sm_c, cat_c = self.compute_confidence(venue, chain['_id'])
             # ignore category confidence for now
             confidence = sum([a_r, u_c, sm_c])
             if confidence >= self.required_confidence:
@@ -188,15 +209,72 @@ class CacheChainMatcher():
 
     def check_existing_chains(self, venue):
 
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            v = venue['response']['venue']
-        else:
-            v = venue
-
         chains = self.cache.get_collection('chains').find()
         return self.find_best_chain(venue, chains)
 
+
+    def check_venue_candidates(self, venue, possible_matches):
+        
+        if len(possible_matches) == 0:
+            return None
+
+        candidates = {}
+        chain_id = None
+        
+        # check match between all possible candidates
+        for v in possible_matches:
+            candidates[v['id']] = self.calc_venue_match_confidence(venue, v)
+
+        # find the best match
+        max_confidence = 0.0
+        best_match = None
+        for v, confidence in candidates.iteritems():
+            if confidence > max_confidence:
+                max_confidence = confidence
+                best_match = v
+
+        if best_match is not None and max_confidence >= self.required_confidence:
+            v = self.cache.get_document('venues', {'_id': best_match})
+            chain_id = self.check_chain_lookup(v)
+            if chain_id is not None:
+                self.cm.add_to_chain(chain_id, venue, max_confidence)
+                return chain_id
+            else:
+                return self.cm.create_chain(venue, v, max_confidence)     
+        return chain_id
+
+
+    def check_venue_candidate_chains(self, venue, possible_matches):
+        
+        chains = []
+        chain_id = None
+        
+        for v in possible_matches:
+            chain_id = self.check_chain_lookup(v)
+            if chain_id is not None:
+                chains.append(self.cache.get_document('chains', {'_id': chain_id}))
+
+        chain_id = self.find_best_chain(venue, chains)
+
+        return chain_id
+
+    def exact_compare_on_query(self, venue, query):
+        # check the cache based on query
+        venues = self.cache.get_documents('venues', query)
+
+        # see if any returned venues belong to a chain
+        # if so, compute the confidences that this venue should belong to that chain
+        chain_id = self.check_venue_candidate_chains(venue, venues)
+        if chain_id is not None:
+            return chain_id
+
+        # if no chain yet, but venues match, 
+        # check to see if they can form a new chain
+        chain_id = self.check_venue_candidates(venue, venues)
+        if chain_id is not None:
+            return chain_id
+
+        return None
 
     def exact_compare_to_cache(self, venue):
         """
@@ -205,56 +283,47 @@ class CacheChainMatcher():
         the chain
         """
 
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            v = venue['response']['venue']
-        else:
-            v = venue
+        chain_id = None
 
-        # first, look for exact matches
+        # first, look for exact matches by name
         query = {'response.venue.name': v['name']}
+        chain_id = self.exact_compare_on_query(venue, query)
+        if chain_id is not None:
+            return chain_id
 
-        # check the cache based on query
-        venues = self.cache.get_documents('venues', query)
-
-        # see if any returned venues belong to a chain
-        # if so, compute the confidences that this venue should belong to that chain
-        chains = []
-        for venue in venues:
-            chain_id = self.check_chain_lookup(venue)
+        # look for exact matches by url
+        if venue.get('url') and venue['url'] and venue['url'] != '' and venue['url'] != 'none':
+            query = {'response.venue.url': venue['url']}
+            chain_id = self.exact_compare_on_query(venue, query)
             if chain_id is not None:
-                chains.append(self.cache.get_document('chains', {'_id': chain_id}))
+                return chain_id
 
-        return self.find_best_chain(venue, chains)
+        # look for exact matches by twitter
+        if venue.get('contact'):
+            if venue['contact'].get('twitter'):
+                query = {'response.contact.twitter': venue['contact']['twitter']}
+                chain_id = self.exact_compare_on_query(venue, query)
+                if chain_id is not None:
+                    return chain_id
 
+        return None
 
-    def fuzzy_compare_to_cache(self, venue):
-
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            v = venue['response']['venue']
-        else:
-            v = venue
-
-        v1 = self.vs.get_venue_json(v['id'])
+    def fuzzy_compare_to_cache(self, venue, skip):
 
         candidates = {}
 
-        # look at all the other venues
-        for v2 in self.venues:
-            # make sure we're not comparing the venue against itself
-            if v2 != v1['id']:
-                # if v2 has been matched, exact check should have picked it up
-                # if v2 has not been matched, it's already been checked against this
-                if v2 not in self.matched and v2 not in self.no_matches:
-                    # make sure we're not comparing against venues from existing chains
-                    # (use 'check_existing_chains' for that)
-                    if not self.cache.document_exists('chain_id_lookup', {'_id': v2}):
-                        n_d, u_m, sm_m, cat_m = self.calc_venue_distance(v1, v2)
-                        # ignore cat_distance for now
-                        confidence = sum([n_d, u_m, sm_m])
-                        if confidence >= self.required_confidence:
-                            candidates[v2['id']] = confidence
+        # look at all the other venues that haven't already been compared
+        for i, v in enumerate(self.venues[skip+1:]):
+
+            # visual sign of how far through we are
+            if i % 1000 == 0
+                print '.',
+
+            n_d, u_m, sm_m, cat_m = self.calc_venue_match_confidence(venue, v)
+            # ignore cat_distance for now
+            confidence = sum([n_d, u_m, sm_m])
+            if confidence >= self.required_confidence:
+                candidates[v['id']] = confidence
 
         # find the best match
         max_confidence = 0.0
@@ -299,39 +368,48 @@ if __name__ == '__main__':
     ccm = CacheChainMatcher()
     ct = CategoryTree()
 
-    for i, venue in enumerate(ccm.venues):
-        # don't want to check chains for residences and homes
-        if len(venue['categories']) > 0:
-            category = venue['categories'][0]
-            root_category = ct.get_root_node_for_id(category['id'])
-            if root_category['foursq_id'] != "4e67e38e036454776db1fb3a":      
-                chain_id = None
-                print '%d: %s' % (i, venue['name'])
-                chain_id = ccm.check_chain_lookup(venue)
+    # create a shallow copy of venues list
+    venues = ccm.venues[:]
+
+    # go through all venues
+    for i, venue in enumerate(venues):     
+        
+        # let us know how far we are through the list
+        chain_id = None
+        print '%d: %s' % (i, venue['name'])
+
+        # check if the venue is already in a chain
+        chain_id = ccm.check_chain_lookup(venue)
+        if chain_id == None:
+            print 'check_chain_lookup failed'
+
+            # compare the venue against existing chains
+            chain_id = ccm.check_existing_chains(venue)
+            if chain_id == None:
+                print 'check_existing_chains failed'
+
+                # see if any venues in cache match exactly
+                chain_id = ccm.exact_compare_to_cache(venue)
                 if chain_id == None:
-                    print 'check_chain_lookup failed'
-                    chain_id = ccm.check_existing_chains(venue)
+                    print 'exact_compare_to_cache failed'
+
+                    # check the rest of the venues in the cache
+                    chain_id = ccm.fuzzy_compare_to_cache(venue, i)
                     if chain_id == None:
-                        print 'check_existing_chains failed'
-                        chain_id = ccm.exact_compare_to_cache(venue)
-                        if chain_id == None:
-                            print 'exact_compare_to_cache failed'
-                            chain_id = ccm.fuzzy_compare_to_cache(venue)
-                            if chain_id == None:
-                                print 'fuzzy_compare_to_cache failed'
-                                ccm.add_no_match(venue)
-                            else:
-                                print 'fuzzy_compare_to_cache found chain %s' % (chain_id)
-                                ccm.add_match(venue)
-                        else:
-                            print 'exact_compare_to_cache found chain %s' % (chain_id)
-                            ccm.add_match(venue)
+                        print 'fuzzy_compare_to_cache failed'
+                        ccm.add_no_match(venue)
                     else:
-                        print 'check_existing_chains found chain %s' % (chain_id)
+                        print 'fuzzy_compare_to_cache found chain %s' % (chain_id)
                         ccm.add_match(venue)
                 else:
-                    print 'check_chain_lookup found chain: %s' % (chain_id)
+                    print 'exact_compare_to_cache found chain %s' % (chain_id)
                     ccm.add_match(venue)
+            else:
+                print 'check_existing_chains found chain %s' % (chain_id)
+                ccm.add_match(venue)
+        else:
+            print 'check_chain_lookup found chain: %s' % (chain_id)
+            ccm.add_match(venue)
         print '%d with no matches' % len(ccm.no_matches)
         print '%d with matches' % len(ccm.matched)
 
