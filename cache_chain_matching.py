@@ -42,7 +42,7 @@ class CacheChainMatcher():
         db_venues = self.cache.get_collection('venues').find(timeout=False)
         
         # extract information needed for comparison
-        for v in db_venues:
+        for v in db_venues[:1000]:
             # just work with venue information instead of whole response
             if v.get('response'):
                 v = v['response']['venue']  
@@ -117,178 +117,60 @@ class CacheChainMatcher():
 
         if confidence >= self.required_chain_confidence:
             print 'cec found match %s for %s, confidence %f' % (best_match['names'], venue['name'], confidence)
-            self.cm.add_to_chain(best_match['_id'], venue, confidence)
+            self.cm.add_to_chain(best_match['_id'], [venue], [confidence])
             return best_match['_id']
         else:
             return None
 
-    def recursive_chain_comparison(self, venues):
 
-        print 'recursing - chains'
+    def fuzzy_compare_to_cache(self, venue):
 
-        if len(venues) < 1:
-            return None
-
-        # one venue to compare against all others
-        venue = venues.pop(0)
-
-        if self.check_chain_lookup(venue) is None:
-            # check existing chains
-            chain_id = self.check_existing_chains(venue)
-            if chain_id is None:
-                # check all others to see if they're in a chain
-                chains = [self.check_chain_lookup(v) for v in venues]
-                # if they are, get the chain details and find the best match
-                candidates = [self.cache.get_document('chains', {'_id': c['_id']}) for c in chains if c is not None]
-                chain, confidence = find_best_chain_match(venue, candidates)
-                if chain is not None and confidence >= self.required_chain_confidence:
-                    print 'rcm found match %s for %s, confidence %f' % (chain['names'], venue['name'], confidence)
-                    self.cm.add_to_chain(chain['_id'], venue, confidence)
-        
-        # compare remaining venues
-        return self.recursive_chain_comparison(venues)
-
-
-    def recursive_venue_comparison(self, venues):
-
-        print 'recursing - venues'
-        
-        if len(venues) < 1:
-            return None
-
-        # one venue to compare against the others
-        venue = venues.pop(0)
-        if self.check_chain_lookup(venue) is None:
-            # see if there's a good match
-            # check existing chains
-            chain_id = self.check_existing_chains(venue)
-            if chain_id is None:
-                match_venue, confidence = find_best_venue_match(venue, venues)
-                if match_venue is not None and confidence > self.required_venue_confidence:
-                    print 'rvm found match %s for %s, confidence %f' % (match_venue['name'], venue['name'], confidence)
-                    # is it already in a chain?
-                    chain_id = self.check_chain_lookup(match_venue)
-                    # if so, add this venue
-                    if chain_id is not None:
-                        self.cm.add_to_chain(chain_id, venue, confidence)
-                    # if not, create a new chain
-                    else:
-                        self.cm.create_chain(venue, match_venue, confidence)
-
-        # compare remaining venues
-        return self.recursive_venue_comparison(venues)
-
-
-    def compare_query_results(self, venue, query):
+        chain_id = None
 
         # just need the venue data, not the whole API response
         if venue.get('response'):
             venue = venue['response']['venue']
 
-        possible_matches = self.cache.get_documents('venues', query)
-        print 'cqr - %d possible matches (%s)' % (possible_matches.count(), query)
-        chain_id = None
+        venue_matches = []
+        confidences = []
 
-        if possible_matches.count() > 0:
-
-            # first need to check whether any matches belong to chains
-            chains = [self.check_chain_lookup(v) for v in possible_matches]
-            candidates = [self.cache.get_document('chains', {'_id': c}) for c in chains if c is not None]
-
-            # find any possible match
-            chain, confidence = find_best_chain_match(venue, candidates)
-
-            # we've found a match for this one
-            if chain is not None and confidence >= self.required_chain_confidence:
-                print 'found match for %s: %s - confidence %f' % (venue['name'], chain['names'], confidence)
-                self.cm.add_to_chain(chain['_id'], venue, confidence)
-                # check possible matches for the other results
-                pm = [v for v in possible_matches]
-                self.recursive_chain_comparison(pm)
-                return chain['_id']
-            else:
-                # still check for possible matches for the other results
-                pm = [v for v in possible_matches]
-                self.recursive_chain_comparison(pm)
-
-            # check to see if the venues could form a new chain
-            match_venue, confidence = find_best_venue_match(venue, possible_matches)
-            if match_venue is not None and confidence > self.required_venue_confidence:
-                # is it already in a chain?
-                chain_id = self.check_chain_lookup(match_venue)
-                # if so, add this venue
-                if chain_id is not None:
-                    self.cm.add_to_chain(chain_id, venue, confidence)
-                    # check possible matches against themselves
-                    pm = [v for v in possible_matches]
-                    self.recursive_venue_comparison(pm)
-                    return chain_id
-                # if not, create a new chain
-                else:
-                    chain_id = self.cm.create_chain(venue, match_venue, confidence)
-                    # just created a new chain, worth checking possible matches again
-                    pm = [v for v in possible_matches]
-                    self.recursive_chain_comparison(pm)
-                    # check possible matches against themselves
-                    self.recursive_venue_comparison(pm)
-                    return chain_id
-            else:
-                pm = [v for v in possible_matches]
-                self.recursive_venue_comparison(pm)
-        return None
-
-
-    def exact_compare_to_cache(self, venue):
-        """
-        See if any of the details of the venue match any venues in the database exactly
-        """
-        chain_id = None
-
-        # first, look for exact matches by name
-        query = {'response.venue.name': venue['name']}
-        chain_id = self.compare_query_results(venue, query)
-        if chain_id is not None:
-            return chain_id
-
-        # look for exact matches by url
-        if venue.get('url') and venue['url'] and venue['url'] != '' and venue['url'] != 'none':
-            query = {'response.venue.url': venue['url']}
-            chain_id = self.compare_query_results(venue, query)
-            if chain_id is not None:
-                return chain_id
-
-        # look for exact matches by twitter
-        if venue.get('contact'):
-            if venue['contact'].get('twitter'):
-                query = {'response.contact.twitter': venue['contact']['twitter']}
-                chain_id = self.compare_query_results(venue, query)
-                if chain_id is not None:
-                    return chain_id
-
-        return None
-
-    def fuzzy_compare_to_cache(self, venue, skip=0):
-
-        max_confidence = 0.0
-        best_match = None
         # look at all the other venues that haven't already been compared
-        for i, v in enumerate(self.venues[skip+1:]):
+        for i, v in enumerate(self.venues):
 
-            nd, um, sm, cm = calc_venue_match_confidence(venue, v)
-            confidence = sum([nd, um, sm])
-            if confidence > max_confidence:
-                max_confidence = confidence
-                best_match = v
+            if venue['id'] != v['id']:
 
-        if best_match is not None and max_confidence >= self.required_venue_confidence:
-            print 'fz found match %s for %s, confidence %f (%f, %f, %f)' % (best_match['name'], venue['name'], max_confidence, nd, um, sm)
-            chain_id = self.check_chain_lookup(best_match)
-            if chain_id is not None:
-                self.cm.add_to_chain(chain_id, venue, max_confidence)
-                return chain_id
+                nd, um, sm, cm = calc_venue_match_confidence(venue, v)
+                confidence = sum([nd, um, sm])
+                if confidence > self.required_venue_confidence:
+                    venue_matches.append(v)
+                    confidences.append(confidence)
+
+        if len(venue_matches) == 0:
+            print 'fz found no match for %s' % (venue['name'])
+            return None
+        else:
+            print 'fz found %d matches for %s' % (len(venue_matches), venue['name'])
+            chains = []
+            to_remove = []
+            for i, v in enumerate(venue_matches):
+                chain_id = self.check_chain_lookup(v)
+                if chain_id is not None:
+                    chains.append(self.cache.get_document('chains', {'_id': chain_id}))
+                    to_remove.append(i)
+
+            for i in to_remove:
+                venue_matches.pop(i)
+                confidences.pop(i)
+
+            if len(chains) == 0:
+                chain_id = self.cm.create_chain(venue_matches, confidences)
+            elif len(chains) == 1:
+                chain_id = chains[0]['_id']
+                self.cm.add_to_chain(chain_id, venue_matches, confidences)
             else:
-                return self.cm.create_chain(venue, best_match, max_confidence)           
+                raise RuntimeError()
 
+        return chain_id
 
 if __name__ == '__main__':
 
@@ -296,6 +178,7 @@ if __name__ == '__main__':
 
     # create our own shallow copy of venues list
     venues = ccm.venues[:]
+
     for i, venue in enumerate(venues):
 
         chain_id = None
@@ -311,19 +194,12 @@ if __name__ == '__main__':
             if chain_id == None:
                 print 'check_existing_chains failed'
 
-                # see if any venues in cache match exactly
-                chain_id = ccm.exact_compare_to_cache(venue)
+                # check the rest of the venues in the cache
+                chain_id = ccm.fuzzy_compare_to_cache(venue)
                 if chain_id == None:
-                    print 'exact_compare_to_cache failed'
-
-                    # check the rest of the venues in the cache
-                    chain_id = ccm.fuzzy_compare_to_cache(venue, i)
-                    if chain_id == None:
-                        print 'fuzzy_compare_to_cache failed'
-                    else:
-                        print 'fuzzy_compare_to_cache found chain %s' % (chain_id)
+                    print 'fuzzy_compare_to_cache failed'
                 else:
-                    print 'exact_compare_to_cache found chain: %s' % (chain_id)    
+                    print 'fuzzy_compare_to_cache found chain %s' % (chain_id)
             else:
                 print 'check_existing_chains found chain: %s' % (chain_id)
         else:
