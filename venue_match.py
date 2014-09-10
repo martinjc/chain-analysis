@@ -73,29 +73,4 @@ def calc_venue_match_confidence(venue1, venue2):
             category_match = -1.0
 
     return name_distance, url_match, social_media_match, category_match
-
-
-def find_best_venue_match(venue, candidate_venues):
-
-    # just need the venue data, not the whole API response
-    if venue.get('response'):
-        v = venue['response']['venue']
-    else:
-        v = venue
-
-    max_confidence = 0.0
-    best_match = None
     
-    for candidate in candidate_venues:
-        if candidate.get('response'):
-            c = candidate['response']['venue']
-        else:
-            c = candidate
-            
-            nd, um, sm, cm = calc_venue_match_confidence(v, c)
-            confidence = sum([nd, um, sm])
-            if confidence > max_confidence:
-                max_confidence = confidence
-                best_match = c
-    
-    return best_match, max_confidence
