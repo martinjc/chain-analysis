@@ -28,6 +28,17 @@ class CachedChain:
         self._empty_chain()
         self.cache=cache
 
+    
+    def _from_dict(self, chain):
+        self.id = chain["_id"]
+        self.venues = set(chain["venues"])
+        self.names = set(chain["names"])
+        self.categories = set(chain["categories"])
+        self.urls = set(chain["urls"])
+        self.twitter = set(chain["twitter"])
+        self.facebook = set(chain["facebook"])
+        self.confidences = chain["confidences"]   
+
 
     def _to_dict(self):
 
@@ -54,10 +65,12 @@ class CachedChain:
         self.facebook = set()
         self.confidences = {}
 
+
     def calculate_confidences():
         for venue in self.venues:
             venue_data = self.cache.get_document('venues', {"_id": venue})
-            self.confidences[venue] = self.get_venue_match_confidence(venue_data)        
+            nd, um, sm, cm = self.get_venue_match_confidence(venue_data)
+            self.confidences[venue] = sum([nd,um,sm])       
 
 
     def prune_chain(self, required_confidence):
@@ -75,7 +88,7 @@ class CachedChain:
     def get_venue_match_confidence(self, venue):
 
         if venue.get('response'):
-            venue = venue['response']['venue'])
+            venue = venue['response']['venue']
 
         # if it's a new venue, just return the match confidence
         if venue['id'] not in self.venues:
@@ -83,7 +96,7 @@ class CachedChain:
         # otherwise build a copy of the chain with the venue removed,
         # then calculate and return the confidence
         else:
-            chain = CachedChain(self.cache):
+            chain = CachedChain(self.cache)
             for v in self.venues:
                 if v != venue['id']:
                     v_data = self.cache.get_document('venues', {"_id": v})
@@ -94,7 +107,7 @@ class CachedChain:
     def remove_venue(self, venue):
 
         if venue.get('response'):
-            venue = venue['response']['venue'])        
+            venue = venue['response']['venue']   
 
         venues = self.venues[:]
         self._empty_chain()
@@ -103,12 +116,13 @@ class CachedChain:
                 self.add_venue(v)
 
         self.cache.remove_document('chain_id_lookup', {'_id': venue['id']})
+        self.calculate_confidences()
 
 
     def add_venue(self, venue):
 
         if venue.get('response'):
-            venue = venue['response']['venue'])
+            venue = venue['response']['venue']
 
         self.venues.add(venue['id'])
         self.names.add(venue['name'])
@@ -134,15 +148,16 @@ class CachedChain:
         for venue in self.venues:
             # add the inverse lookup
             v = self.cache.get_document('venues', {"_id": venue})
+            nd, um, sm, cm = self.get_venue_match_confidence(v)
             data = {'_id': venue,
                     'chain_id': self.id,
-                    'confidence': self.get_venue_match_confidence(v)}
-            self.cache.put_document('chain_id_lookup', data)            
+                    'confidence': sum([nd,um,sm])}
+            self.cache.put_document('chain_id_lookup', data)
 
 
 class ChainManager:
     """
-    ChainManager is responsible for handling all chain operations.
+    ChainManager is responsible for handling chain operations.
     """
 
     def __init__(self, db_name='fsqexp'):
@@ -157,6 +172,13 @@ class ChainManager:
         chain.save()
         return chain
 
+    def add_to_chain(self, chain_id, venues):
+        chain = self.load_chain(chain_id)
+        for venue in venues:
+            chain.add_venue(venue)
+        chain.save()
+        return chain       
+
     def delete_chain(self, chain):
         venues = chain.venues[:]
         for venue in venues:
@@ -165,9 +187,14 @@ class ChainManager:
 
     def merge_chains(self, chain1, chain2):
         venues = chain1.venues[:] + chain2.venues[:]
-
         self.delete_chain(chain1)
         self.delete_chain(chain2)
-
         return self.create_chain(venues)
+
+    def load_chain(self, chain_id):
+        chain = self.cache.get_document('chains', {"_id": chain_id})
+        c = CachedChain(self.cache)
+        c._from_dict(chain)
+        return c
+
 

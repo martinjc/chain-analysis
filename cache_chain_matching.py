@@ -17,10 +17,10 @@
 from urlparse import urlparse
 
 from db_cache import MongoDBCache
-from chain_manager import ChainManager
+from chain_manager import ChainManager, CachedChain
 from category_utils import CategoryTree
 
-from venue_match import calc_venue_match_confidence, find_best_venue_match
+from venue_match import calc_venue_match_confidence
 from chain_match import calc_chain_match_confidence, find_best_chain_match
 
 class CacheChainMatcher():
@@ -31,18 +31,18 @@ class CacheChainMatcher():
         self.cm = ChainManager(db_name=db_name)
         self.ct = CategoryTree()
 
-        self.venues = self.extract_venue_information()
+        self.venues = self._extract_venue_information()
         self.required_venue_confidence = required_venue_confidence
         self.required_chain_confidence = required_chain_confidence
 
-    def extract_venue_information(self):
+    def _extract_venue_information(self):
 
         venues = []
         # get all the venues from the database
         db_venues = self.cache.get_collection('venues').find(timeout=False)
         
         # extract information needed for comparison
-        for v in db_venues[:1000]:
+        for v in db_venues:
             # just work with venue information instead of whole response
             if v.get('response'):
                 v = v['response']['venue']  
@@ -117,7 +117,7 @@ class CacheChainMatcher():
 
         if confidence >= self.required_chain_confidence:
             print 'cec found match %s for %s, confidence %f' % (best_match['names'], venue['name'], confidence)
-            self.cm.add_to_chain(best_match['_id'], [venue], [confidence])
+            self.cm.add_to_chain(best_match['_id'], [venue])
             return best_match['_id']
         else:
             return None
@@ -146,10 +146,7 @@ class CacheChainMatcher():
 
         # have we found any matches?
         if len(venue_matches) <= 1:
-            print 'fz found no match for %s' % (venue['name'])
             return None
-        else:
-            print 'fz found %d matches for %s' % (len(venue_matches), venue['name'])
 
             # are any matches already in a chain?
             chains = set()
@@ -161,24 +158,13 @@ class CacheChainMatcher():
 
             # creating a new chain
             if len(chains) == 0:
-                venues_to_add = []
-                confidences = []
-                for venue in venue_matches:
-                    candidate_venues = venue_matches[:].remove(venue)
-                    chain = cm.create_empty_chain
-                    for v in candidate_venues:
-                        chain = cm.add_to_chain(chain, v)
-                    confidence = calc_chain_match_confidence(venue, chain)
-                    if confidence > self.required_chain_confidence:
-                        venues_to_add.append(venue)
-                        confidences.append(confidence)
-                chain = self.cm.create_chain(venues_to_add, confidences)
-                chain_id = chain["_id"]
+                chain = self.cm.create_chain(venue_matches)
+                chain_id = chain.id
             elif len(chains) == 1:
-                chain_id = chains[0]['_id']
-                self.cm.add_to_chain(chain_id, venue_matches, confidences)
+                chain_id = list(chains)[0]
+                chain = self.cm.add_to_chain(chain_id, venue_matches)
             else:
-                raise RuntimeError()
+                raise RuntimeError
 
         return chain_id
 
