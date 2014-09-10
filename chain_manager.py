@@ -145,15 +145,28 @@ class CachedChain:
         chain = self._to_dict()
         self.cache.put_document('chains', chain)
 
+        # check inverse relationships (venue_id -> chain) are correct
         for venue in self.venues:
-            # add the inverse lookup
-            v = self.cache.get_document('venues', {"_id": venue})
-            nd, um, sm, cm = self.get_venue_match_confidence(v)
-            data = {'_id': venue,
-                    'chain_id': self.id,
-                    'confidence': sum([nd,um,sm])}
-            self.cache.put_document('chain_id_lookup', data)
-
+            # if the lookup doesn't already exist
+            if not self.cache.document_exists('chain_id_lookup', {"_id": venue}):
+                # add the inverse lookup
+                v = self.cache.get_document('venues', {"_id": venue})
+                nd, um, sm, cm = self.get_venue_match_confidence(v)
+                data = {'_id': venue,
+                        'chain_id': self.id,
+                        'confidence': sum([nd,um,sm])}
+                self.cache.put_document('chain_id_lookup', data)
+            # if the lookup already exists, ensure it's pointing to the right chain
+            else:
+                lookup = self.cache.get_document('chain_id_lookup', {"_id": venue})
+                if lookup['chain_id'] != self.id:     
+                    # add the inverse lookup
+                    v = self.cache.get_document('venues', {"_id": venue})
+                    nd, um, sm, cm = self.get_venue_match_confidence(v)
+                    data = {'_id': venue,
+                            'chain_id': self.id,
+                            'confidence': sum([nd,um,sm])}
+                    self.cache.put_document('chain_id_lookup', data)
 
 class ChainManager:
     """
