@@ -148,23 +148,23 @@ class CacheChainMatcher():
         if len(venue_matches) <= 1:
             return None
 
-            # are any matches already in a chain?
-            chains = set()
-            for v in venue_matches:
-                chain_id = self.check_chain_lookup(v)
-                if chain_id is not None:
-                    chains.add(chain_id)
-                    venue_matches.remove(v)
+        # are any matches already in a chain?
+        chains = set()
+        for v in venue_matches:
+            chain_id = self.check_chain_lookup(v)
+            if chain_id is not None:
+                chains.add(chain_id)
+                venue_matches.remove(v)
 
-            # creating a new chain
-            if len(chains) == 0:
-                chain = self.cm.create_chain(venue_matches)
-                chain_id = chain.id
-            elif len(chains) == 1:
-                chain_id = list(chains)[0]
-                chain = self.cm.add_to_chain(chain_id, venue_matches)
-            else:
-                raise RuntimeError
+        # creating a new chain
+        if len(chains) == 0:
+            chain = self.cm.create_chain(venue_matches)
+            chain_id = chain.id
+        elif len(chains) == 1:
+            chain_id = list(chains)[0]
+            chain = self.cm.add_to_chain(chain_id, venue_matches)
+        else:
+            raise RuntimeError
 
         return chain_id
 

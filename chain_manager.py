@@ -70,7 +70,7 @@ class CachedChain:
         for venue in self.venues:
             venue_data = self.cache.get_document('venues', {"_id": venue})
             nd, um, sm, cm = self.get_venue_match_confidence(venue_data)
-            self.confidences[venue] = sum([nd,um,sm])       
+            self.confidences[venue] = sum([nd,um, sm])       
 
 
     def prune_chain(self, required_confidence):
