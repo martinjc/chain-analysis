@@ -36,26 +36,27 @@ class ChainManager:
         self.cache = MongoDBCache(db=db_name)
 
 
-    def create_chain(self, venue1, venue2, confidence):
+    def create_chain(self, venues, confidences):
         """
-        Takes two Foursquare '/venues/id/' API responses and creates
-        a chain linking the two together
+        Takes some Foursquare '/venues/id/' API responses and creates
+        a chain linking them together
         """
 
-        # just need the venue data, not the whole API response
-        if venue1.get('response'):
-            v1 = venue1['response']['venue']
-        else:
-            v1 = venue1
-        if venue2.get('response'):
-            v2 = venue2['response']['venue']
-        else:
-            v2 = venue2
+        v = []
 
-        # check we have two different venues and that neither already belongs to a chain
-        assert v1['id'] != v2['id']
-        assert not self.cache.document_exists('chain_id_lookup', {'_id': v1['id']})
-        assert not self.cache.document_exists('chain_id_lookup', {'_id': v2['id']})
+        for venue in venues:
+            if venue.get('response'):
+                v.append(venue['response']['venue'])
+            else:
+                v.append(venue)
+
+        # check we have at least two different venues
+        v_ids = set([venue['id'] for venue in v])
+        assert len(v_ids) > 1
+        
+        # check none of the venues are already in a chain
+        for venue in v:
+            assert not self.cache.document_exists('chain_id_lookup', {'_id': venue['id']})
 
         # create a new chain_id
         chain_id = uuid.uuid4().hex
@@ -75,13 +76,12 @@ class ChainManager:
         self.cache.put_document('chains', chain)
 
         # add each venue to the new chain
-        for venue in [v1, v2]:
-            self.add_to_chain(chain_id, venue, confidence)
+        self.add_to_chain(chain_id, v, confidences)
 
         return chain_id
         
 
-    def add_to_chain(self, chain_id, venue, confidence):
+    def add_to_chain(self, chain_id, venues, confidences):
         """
         Add a venue to the specified chain. 'venue' can be a complete
         Foursquare /venues/id/ API response, just the venue portion, or a
@@ -90,51 +90,53 @@ class ChainManager:
         # check the chain exists
         assert self.cache.document_exists('chains', {'_id': chain_id})
 
-        # if we've got a full API response, extract venue information
-        if venue.get('response'):
-            venue = venue['response']['venue']
+        for i, venue in enumerate(venues):
 
-        # check the venue doesn't belong to a chain already
-        assert not self.cache.document_exists('chain_id_lookup', {'_id': venue['id']})
+            # if we've got a full API response, extract venue information
+            if venue.get('response'):
+                venue = venue['response']['venue']
 
-        # retrieve the chain document and add the venue
-        chain = self.cache.get_document('chains', {'_id': chain_id})
+            # check the venue doesn't belong to a chain already
+            assert not self.cache.document_exists('chain_id_lookup', {'_id': venue['id']})
+
+            # retrieve the chain document and add the venue
+            chain = self.cache.get_document('chains', {'_id': chain_id})
         
-        if venue['id'] not in chain['venues']:
-            chain['venues'].append(venue['id'])
+            if venue['id'] not in chain['venues']:
+                chain['venues'].append(venue['id'])
         
-        if venue['name'] not in chain['names']:
-            chain['names'].append(venue['name'])
+            if venue['name'] not in chain['names']:
+                chain['names'].append(venue['name'])
         
-        chain['confidences'][venue['id']] = confidence
+            chain['confidences'][venue['id']] = confidences[i]
 
-        # add any extra details
-        if venue.get('url'):
-            venue_url = urlparse(venue['url']).netloc
-            if not venue['url'] in chain['urls']:
-                chain['urls'].append(venue['url'])
-        if venue.get('contact'):
-            if venue['contact'].get('twitter'):
-                if not venue['contact']['twitter'] in chain['twitter']:
-                    chain['twitter'].append(venue['contact']['twitter'])
-            if venue['contact'].get('facebook'):
-                if not venue['contact']['facebook'] in chain['facebook']:
-                    chain['facebook'].append(venue['contact']['facebook'])
-        if venue.get('categories'):
-            for category in venue['categories']:
-                if not category['id'] in chain['categories']:
-                    chain['categories'].append(category['id'])
+            # add any extra details
+            if venue.get('url'):
+                venue_url = urlparse(venue['url']).netloc
+                if not venue['url'] in chain['urls']:
+                    chain['urls'].append(venue['url'])
+            if venue.get('contact'):
+                if venue['contact'].get('twitter'):
+                    if not venue['contact']['twitter'] in chain['twitter']:
+                        chain['twitter'].append(venue['contact']['twitter'])
+                if venue['contact'].get('facebook'):
+                    if not venue['contact']['facebook'] in chain['facebook']:
+                        chain['facebook'].append(venue['contact']['facebook'])
+            if venue.get('categories'):
+                for category in venue['categories']:
+                    if not category['id'] in chain['categories']:
+                        chain['categories'].append(category['id'])
 
-        # store the updated chain
-        self.cache.put_document('chains', chain)
+            # store the updated chain
+            self.cache.put_document('chains', chain)
 
-        # add the inverse lookup
-        data = {'_id': venue['id'],
-                'chain_id': chain_id,
-                'confidence': confidence}
-        self.cache.put_document('chain_id_lookup', data)
+            # add the inverse lookup
+            data = {'_id': venue['id'],
+                    'chain_id': chain_id,
+                    'confidence': confidence}
+            self.cache.put_document('chain_id_lookup', data)
 
-        print 'CM: added %s to chain %s' % (venue['id'], chain_id)
+            print 'CM: added %s to chain %s' % (venue['id'], chain_id)
 
 
     def remove_from_chain(self, chain_id, venue):
