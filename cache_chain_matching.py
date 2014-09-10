@@ -129,42 +129,51 @@ class CacheChainMatcher():
 
         # just need the venue data, not the whole API response
         if venue.get('response'):
-            venue = venue['response']['venue']
+            venue = venue['response']['venue'] 
 
-        venue_matches = []
-        confidences = []
+        venue_matches = [venue]
 
         # look at all the other venues that haven't already been compared
         for i, v in enumerate(self.venues):
 
             if venue['id'] != v['id']:
 
+                # calculate match with this venue
                 nd, um, sm, cm = calc_venue_match_confidence(venue, v)
                 confidence = sum([nd, um, sm])
                 if confidence > self.required_venue_confidence:
                     venue_matches.append(v)
-                    confidences.append(confidence)
 
-        if len(venue_matches) == 0:
+        # have we found any matches?
+        if len(venue_matches) <= 1:
             print 'fz found no match for %s' % (venue['name'])
             return None
         else:
             print 'fz found %d matches for %s' % (len(venue_matches), venue['name'])
-            
-            chains = []
-            to_remove = []
-            for i, v in enumerate(venue_matches):
+
+            # are any matches already in a chain?
+            chains = set()
+            for v in venue_matches:
                 chain_id = self.check_chain_lookup(v)
                 if chain_id is not None:
-                    chains.append(self.cache.get_document('chains', {'_id': chain_id}))
-                    to_remove.append(i)
+                    chains.add(chain_id)
+                    venue_matches.remove(v)
 
-            for i in to_remove:
-                venue_matches.pop(i)
-                confidences.pop(i)
-
+            # creating a new chain
             if len(chains) == 0:
-                chain_id = self.cm.create_chain(venue_matches, confidences)
+                venues_to_add = []
+                confidences = []
+                for venue in venue_matches:
+                    candidate_venues = venue_matches[:].remove(venue)
+                    chain = cm.create_empty_chain
+                    for v in candidate_venues:
+                        chain = cm.add_to_chain(chain, v)
+                    confidence = calc_chain_match_confidence(venue, chain)
+                    if confidence > self.required_chain_confidence:
+                        venues_to_add.append(venue)
+                        confidences.append(confidence)
+                chain = self.cm.create_chain(venues_to_add, confidences)
+                chain_id = chain["_id"]
             elif len(chains) == 1:
                 chain_id = chains[0]['_id']
                 self.cm.add_to_chain(chain_id, venue_matches, confidences)
