@@ -150,6 +150,7 @@ class CacheChainMatcher():
             return None
         else:
             print 'fz found %d matches for %s' % (len(venue_matches), venue['name'])
+            
             chains = []
             to_remove = []
             for i, v in enumerate(venue_matches):
