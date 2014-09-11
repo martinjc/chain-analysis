@@ -164,8 +164,12 @@ class CacheChainMatcher():
             chain_id = list(chains)[0]
             chain = self.cm.add_to_chain(chain_id, venue_matches)
         else:
-            raise RuntimeError
-
+            candidate_chains = [self.cache.get_document('chains', {"_id": chain}) for chain in chains]
+            for v in venue_matches:
+                chain, confidence = find_best_chain_match(v, candidate_chains)
+                if confidence > self.required_chain_confidence:
+                    chain_id = chain['_id']
+                    chain = self.cm.add_to_chain(chain_id, [v])
         return chain_id
 
 if __name__ == '__main__':
