@@ -1,10 +1,12 @@
 def venue_response(func):
 
-    def venue_checker(self, venue):
+    def venue_checker(*args):
         # just need the venue data, not the whole API response
-        if venue.get('response'):
-            venue = venue['response']['venue']
+        for i, arg in enumerate(args):
+            if type(arg) == type(dict):
+                if arg.get('response'):
+                    args[i] = arg['response']['venue']
 
-            return func(self, venue)
+            return func(*args)
     return venue_checker
 
