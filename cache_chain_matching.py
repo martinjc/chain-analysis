@@ -109,7 +109,6 @@ class CacheChainMatcher():
             venue = venue['response']['venue']
 
         chain_id = None
-        print 'checking chain lookup for %s' % (venue['name'])
         if self.cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
             chain_id = self.cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id']
 
@@ -125,14 +124,12 @@ class CacheChainMatcher():
         if venue.get('response'):
             venue = venue['response']['venue']
 
-        print 'checking existing chains for %s' % (venue['name'])
         # get all existing chains
         chains = self.cache.get_collection('chains').find()
         # find the best match
         best_match, confidence = find_best_chain_match(venue, chains)
 
         if confidence >= self.required_chain_confidence:
-            print 'cec found match %s for %s, confidence %f' % (best_match['names'], venue['name'], confidence)
             self.cm.add_to_chain(best_match['_id'], [venue])
             return best_match['_id']
         else:
@@ -196,29 +193,14 @@ if __name__ == '__main__':
 
     # create our own shallow copy of venues list
     venues = ccm.venues[:]
-
     for i, venue in enumerate(venues):
-
         chain_id = None
-        print '%d: %s - %s' % (i, venue['name'], venue['id'])
-
         # check if the venue is already in a chain
         chain_id = ccm.check_chain_lookup(venue)
         if chain_id == None:
-            print 'check_chain_lookup failed'
-
             # compare the venue against existing chains
             chain_id = ccm.check_existing_chains(venue)
             if chain_id == None:
-                print 'check_existing_chains failed'
-
                 # check the rest of the venues in the cache
                 chain_id = ccm.fuzzy_compare_to_cache(venue)
-                if chain_id == None:
-                    print 'fuzzy_compare_to_cache failed'
-                else:
-                    print 'fuzzy_compare_to_cache found chain %s' % (chain_id)
-            else:
-                print 'check_existing_chains found chain: %s' % (chain_id)
-        else:
-            print 'check_chain_lookup found chain: %s' % (chain_id)
+
