@@ -99,7 +99,7 @@ class ChainDecider():
 
         # go through all the returned venues and see if 
         # any of them belong to a chain
-        for v in venues:
+        for v in global_venues:
             # need to work with full response
             v = self.vs.get_venue_json(v['id'])
             if not self.is_home(v):
@@ -121,24 +121,11 @@ class ChainDecider():
         # check if the venue is already in a chain
         chain_id = self.ccm.check_chain_lookup(venue)
         if chain_id == None:
-            print 'check_chain_lookup failed'
-
             # compare the venue against existing chains
             chain_id = self.ccm.check_existing_chains(venue)
             if chain_id == None:
-                print 'check_existing_chains failed'
-
                 # check the rest of the venues in the cache
                 chain_id = self.ccm.fuzzy_compare_to_cache(venue)
-                if chain_id == None:
-                    print 'fuzzy_compare_to_cache failed'
-                else:
-                    print 'fuzzy_compare_to_cache found chain %s' % (chain_id)
-            else:
-                print 'check_existing_chains found chain: %s' % (chain_id)
-        else:
-            print 'check_chain_lookup found chain: %s' % (chain_id)
-
         return chain_id
 
 if __name__ == "__main__":
