@@ -21,15 +21,24 @@ from db_cache import MongoDBCache
 from chain_match import calc_chain_match_confidence
 
 class CachedChain:
+    """
+    Python representation of a Chain object to be stored in a Cache
+    """
 
     def __init__(self, cache):
 
+        # initialise with a unique ID
         self.id = uuid.uuid4().hex
+
+        # empty chain object to store data in
         self._empty_chain()
+
+        # the cache we may be loaded from/saved to
         self.cache=cache
 
     
     def _from_dict(self, chain):
+        # create a Chain object from data held in a Python dict
         self.id = chain["_id"]
         self.venues = set(chain["venues"])
         self.names = set(chain["names"])
@@ -41,7 +50,7 @@ class CachedChain:
 
 
     def _to_dict(self):
-
+        # output this chain object as a dictionary
         chain = {
             "_id": self.id,
             "venues": list(self.venues),
@@ -56,7 +65,7 @@ class CachedChain:
 
 
     def _empty_chain(self):
-        
+        # empty all the data out of this chain
         self.venues = set()
         self.names = set()
         self.categories = set()
@@ -67,6 +76,8 @@ class CachedChain:
 
 
     def calculate_confidences():
+        # go through all the venues in the chain and work out the confidence
+        # that the venue actually belongs to the chain
         for venue in self.venues:
             venue_data = self.cache.get_document('venues', {"_id": venue})
             nd, um, sm, cm = self.get_venue_match_confidence(venue_data)
@@ -74,13 +85,13 @@ class CachedChain:
 
 
     def prune_chain(self, required_confidence):
-
+        # remove any venues that have a confidence lower than required_confidence
         self.calculate_confidences()
         to_remove = set()
         for venue, confidence in self.confidences.iteritems():
             if confidence < required_confidence:
                 to_remove.add(venue)
-        
+        # if there's any to remove, remove them
         for venue in to_remove:
             self.remove_venue(self.cache.get_document('venues', {"_id": venue}))
 
@@ -90,7 +101,7 @@ class CachedChain:
         if venue.get('response'):
             venue = venue['response']['venue']
 
-        # if it's a new venue, just return the match confidence
+        # if it's a new venue (not currently in the chain), just return the match confidence
         if venue['id'] not in self.venues:
             return calc_chain_match_confidence(venue, self._to_dict())
         # otherwise build a copy of the chain with the venue removed,
@@ -109,12 +120,16 @@ class CachedChain:
         if venue.get('response'):
             venue = venue['response']['venue']   
 
+        # copy the list of venues
         venues = self.venues[:]
+        # empty the chain
         self._empty_chain()
+        # recreate the chain, but without the venue to be removed
         for v in venues:
             if venue['id'] != v['id']:
                 self.add_venue(v)
 
+        # remove the lookup pointing the removed venue to this chain
         self.cache.remove_document('chain_id_lookup', {'_id': venue['id']})
         self.calculate_confidences()
 
@@ -167,6 +182,7 @@ class CachedChain:
                             'chain_id': self.id,
                             'confidence': sum([nd,um,sm])}
                     self.cache.put_document('chain_id_lookup', data)
+
 
 class ChainManager:
     """

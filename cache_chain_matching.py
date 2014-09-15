@@ -23,19 +23,33 @@ from category_utils import CategoryTree
 from venue_match import calc_venue_match_confidence
 from chain_match import calc_chain_match_confidence, find_best_chain_match
 
-class CacheChainMatcher():
 
+class CacheChainMatcher():
+    """
+    Class to go through the existing venues in the database and cluster them into chains
+    """
     def __init__(self, db_name='fsqexp', required_chain_confidence=0.9, required_venue_confidence=0.9):
 
+        # access to the database
         self.cache = MongoDBCache(db=db_name)
+        # ChainManager handles chain operations
         self.cm = ChainManager(db_name=db_name)
+        # category tools
         self.ct = CategoryTree()
 
+        # extract information about all the venues from the database
         self.venues = self._extract_venue_information()
+
+        # value we use to decide if two venues should be matched together
         self.required_venue_confidence = required_venue_confidence
+        # value we use to decide if a venue should be part of a chain
         self.required_chain_confidence = required_chain_confidence
 
+
     def _extract_venue_information(self):
+        """
+        Go through all venues in the database and extract information about them
+        """
 
         venues = []
         # get all the venues from the database
@@ -83,6 +97,7 @@ class CacheChainMatcher():
 
         return venues
 
+
     def check_chain_lookup(self, venue):
         """
         Checks for a venue lookup document to see if the venue has already
@@ -99,6 +114,7 @@ class CacheChainMatcher():
             chain_id = self.cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id']
 
         return chain_id
+
 
     def check_existing_chains(self, venue):
         """
@@ -160,9 +176,11 @@ class CacheChainMatcher():
         if len(chains) == 0:
             chain = self.cm.create_chain(venue_matches)
             chain_id = chain.id
+        # adding to an existing chain
         elif len(chains) == 1:
             chain_id = list(chains)[0]
             chain = self.cm.add_to_chain(chain_id, venue_matches)
+        # find best match out of many chains
         else:
             candidate_chains = [self.cache.get_document('chains', {"_id": chain}) for chain in chains]
             for v in venue_matches:
