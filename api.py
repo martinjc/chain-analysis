@@ -222,7 +222,12 @@ class APIGateway:
         
         path_suffix = path_suffix.lstrip( '/' )
         
-        url = self.api_base_url + '/' + path_suffix + "?" + urllib.urlencode( params )
+        str_param_data = {}
+        for k, v in params.iteritems():
+            str_param_data[k] = unicode(v).encode('utf-8')
+
+
+        url = self.api_base_url + '/' + path_suffix + "?" + urllib.urlencode(params)
         print url
         
         try:
