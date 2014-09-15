@@ -26,7 +26,7 @@ from chain_match import calc_chain_match_confidence, find_best_chain_match
 
 class CacheChainMatcher():
     """
-    Class to go through the existing venues in the database and cluster them into chains
+    Class to match venues to chains or other venues in a cache
     """
     def __init__(self, db_name='fsqexp', required_chain_confidence=0.9, required_venue_confidence=0.9):
 
