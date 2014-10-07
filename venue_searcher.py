@@ -105,11 +105,12 @@ class VenueSearcher:
 
     def get_venue_json(self, venue_id, check_fresh=False):
 
+        response = None
         if self.cache.document_exists('venues', {'_id': '%s' % (venue_id)}, check_fresh):
             response = self.cache.get_document('venues', {'_id': '%s' % (venue_id)}, check_fresh)
         else:
             try:
-                response = self.wrapper.query_resource('venues', venue_id, get_params=self.params, userless=True)
+                response = self.wrapper.query_resource('venues', venue_id, get_params=self.params, userless=True, tenacious=True)
             except urllib2.HTTPError, e:
                 pass
             except urllib2.URLError, e:
@@ -117,8 +118,11 @@ class VenueSearcher:
             if not response is None:
                 response['_id'] = venue_id
                 self.cache.put_document('venues', response)
-        
-        return response['response']['venue']
+
+        if not response is None:
+            return response['response']['venue']
+        else:
+            return None
 
 
     def search_alternates(self, venue, radius=500, check_fresh=False):
@@ -141,7 +145,7 @@ class VenueSearcher:
             return alternatives['response']['venues']
         else:
             try:
-                alternatives = self.wrapper.query_routine('venues', 'search', params, True)
+                alternatives = self.wrapper.query_routine('venues', 'search', params, True, True)
                 if not alternatives is None:
                     alternatives['params'] = params
                     self.cache.put_document('alternates', alternatives)

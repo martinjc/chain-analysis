@@ -55,20 +55,21 @@ class LocalComparison():
         alternates = self.vs.search_alternates(venue, radius)
         for alternate in alternates:
             v = self.vs.get_venue_json(alternate['id'])
-            if v['id'] != venue['id']:
-                chain_id = self.cd.is_chain(v)
-                if chain_id is not None:
-                    alt_chain_count += 1
-                    chain_alternates.append(v)
-                else:
-                    indie_alternates.append(v)
+            if v is not None:
+                if v['id'] != venue['id']:
+                    chain_id = self.cd.is_chain(v)
+                    if chain_id is not None:
+                        alt_chain_count += 1
+                        chain_alternates.append(v)
+                    else:
+                        indie_alternates.append(v)
 
         return chain_alternates, indie_alternates
 
 
 if __name__ == '__main__':
     
-    distances = [50, 100, 250, 500]
+    distances = [50, 250, 500]
     
     data_fields = ['venue_id', 'venue_name', 'chain']
     for distance in distances:
@@ -76,8 +77,6 @@ if __name__ == '__main__':
         data_fields.append('%d_indie_ids' % distance)
         data_fields.append('%d_chain_names' % distance)
         data_fields.append('%d_chain_ids' % distance)
-
-    
 
     with open('chain_indie_data.csv', 'w') as output_file:
 
