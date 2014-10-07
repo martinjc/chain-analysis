@@ -34,7 +34,7 @@ class LocalComparison():
     def get_venue_ids(self):
         venues = []
         # get all the venues from the database
-        db_venues = self.cache.get_collection('venues').find(timeout=False)
+        db_venues = self.db.get_collection('venues').find(timeout=False)
         
         # extract information needed for comparison
         for v in db_venues:
