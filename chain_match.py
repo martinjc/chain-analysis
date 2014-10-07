@@ -30,7 +30,10 @@ def calc_chain_match_confidence(venue, chain):
     average_ratio = 0.0
     for name in chain['names']:
         ratios.append(ratio(v['name'], name))
-    average_ratio = float(sum(ratios))/len(ratios)
+    if len(ratios) > 0:
+        average_ratio = float(sum(ratios))/len(ratios)
+    else:
+        average_ratio = 0
 
     # check url matches
     url_confidence = 0.0

@@ -83,7 +83,7 @@ class ChainDecider():
             if chain_id == None and self.vs.venue_has_chain_property(venue):
                 # if foursquare insist it's a chain, create a new chain
                 chain = self.cm.create_chain([venue])
-                chain_id = chain['_id']
+                chain_id = chain.id
 
         return chain_id
 

@@ -87,21 +87,42 @@ if __name__ == '__main__':
         lc = LocalComparison()
         venues = lc.get_venue_ids()
 
-        for venue in venues[:1]:
+        for venue in venues[:100]:
 
             v = lc.vs.get_venue_json(venue)
             
             data = dict.fromkeys(data_fields, "")
-            data['venue_id'] = v['response']['venue']['id']
-            data['venue_name'] = v['response']['venue']['name']
+            data['venue_id'] = v['id']
+            data['venue_name'] = v['name']
             data['chain'] = lc.cd.is_chain(v)
 
             for distance in distances:
                 c_a, i_a = lc.local_comparison(v, distance)
-                data['%d_chain_names' % distance] = [alt['response']['venue']['name'] for alt in c_a if alt.get('response')]
-                data['%d_chain_ids' % distance] = [alt['response']['venue']['id'] for alt in c_a if alt.get('response')]
-                data['%d_indie_names' % distance] = [alt['response']['venue']['name'] for alt in i_a if alt.get('response')]
-                data['%d_indie_ids' % distance] = [alt['response']['venue']['id'] for alt in i_a if alt.get('response')]
+
+                data['%d_chain_names' % distance] = []
+                data['%d_chain_ids' % distance] = []
+                data['%d_indie_names' % distance] = []
+                data['%d_indie_ids' % distance] = []
+
+                for alt in c_a:
+                    if alt.get('response'):
+                        data['%d_chain_names' % distance],append(alt['response']['venue']['name'])
+                        data['%d_chain_ids' % distance],append(alt['response']['venue']['id'])
+                    else:
+                        if alt.get('name'):
+                            data['%d_chain_names' % distance].append(alt['name'])
+                        if alt.get('id'):
+                            data['%d_chain_ids' % distance].append(alt['id'])
+
+                for alt in i_a:
+                    if alt.get('response'):
+                        data['%d_indie_names' % distance].append(alt['response']['venue']['name'])
+                        data['%d_indie_ids' % distance].append(alt['response']['venue']['id'])
+                    else:
+                        if alt.get('name'):
+                            data['%d_indie_names' % distance].append(alt['name'])
+                        if alt.get('id'):
+                            data['%d_indie_ids' % distance].append(alt['id'])
 
             writer.writerow(data)
 
