@@ -77,13 +77,13 @@ class ChainDecider():
         if not self.is_home(venue):
             # compare against the chains/venues in the cache
             chain_id = self.is_chain_cached(venue)
-            if chain_id == None:
+            #if chain_id == None:
                 # check against a global search for similar venues
-                chain_id = self.is_chain_global(venue)
-                if chain_id == None and self.vs.venue_has_chain_property(venue):
-                    # if foursquare insist it's a chain, create a new chain
-                    chain = self.cm.create_chain([venue])
-                    chain_id = chain['_id']
+                #chain_id = self.is_chain_global(venue)
+            if chain_id == None and self.vs.venue_has_chain_property(venue):
+                # if foursquare insist it's a chain, create a new chain
+                chain = self.cm.create_chain([venue])
+                chain_id = chain['_id']
 
         return chain_id
 
