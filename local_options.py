@@ -14,6 +14,8 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import csv
+
 from decorators import venue_response
 from db_cache import MongoDBCache
 from chain_decision import ChainDecider
@@ -29,6 +31,19 @@ class LocalComparison():
         self.cd = ChainDecider()
         self.db = MongoDBCache(db='fsqexp')
 
+    def get_venue_ids(self):
+        venues = []
+        # get all the venues from the database
+        db_venues = self.cache.get_collection('venues').find(timeout=False)
+        
+        # extract information needed for comparison
+        for v in db_venues:
+            # just work with venue information instead of whole response
+            if v.get('response'):
+                v = v['response']['venue']  
+                
+            venues.append(v['id'])
+        return venues
 
     @venue_response
     def local_comparison(self, venue, radius):
@@ -53,29 +68,41 @@ class LocalComparison():
 
 if __name__ == '__main__':
     
+    distances = [50, 100, 250, 500]
+    
+    data_fields = ['venue_id', 'venue_name', 'chain']
+    for distance in distances:
+        data_fields.append('%d_indie_names' % distance)
+        data_fields.append('%d_indie_ids' % distance)
+        data_fields.append('%d_chain_names' % distance)
+        data_fields.append('%d_chain_ids' % distance)
 
-    lc = LocalComparison()
+    
 
-    cb = lc.vs.get_venue_json('4d00decff7b38cfab4bcd1c3')
+    with open('chain_indie_data.csv', 'w') as output_file:
 
-    print lc.cd.is_chain(cb)
+        writer = csv.DictWriter(output_file, data_fields)
+        writer.writeheader()
 
-    c_a, i_a = lc.local_comparison(cb, 500)
+        lc = LocalComparison()
+        venues = lc.get_venue_ids()
 
-    print cb['name']
+        for venue in venues[:1]:
 
-    print 'chain_alternates:'
+            v = lc.vs.get_venue_json(venue)
+            
+            data = dict.fromkeys(data_fields, "")
+            data['venue_id'] = v['response']['venue']['id']
+            data['venue_name'] = v['response']['venue']['name']
+            data['chain'] = lc.cd.is_chain(v)
 
-    for alt in c_a:
-        if alt.get('response'):
-            alt = alt['response']['venue']
-        print alt['name']
+            for distance in distances:
+                c_a, i_a = lc.local_comparison(v, distance)
+                data['%d_chain_names' % distance] = [alt['response']['venue']['name'] for alt in c_a if alt.get('response')]
+                data['%d_chain_ids' % distance] = [alt['response']['venue']['id'] for alt in c_a if alt.get('response')]
+                data['%d_indie_names' % distance] = [alt['response']['venue']['name'] for alt in i_a if alt.get('response')]
+                data['%d_indie_ids' % distance] = [alt['response']['venue']['id'] for alt in i_a if alt.get('response')]
 
-    print 'indie_alternates:'
-
-    for alt in i_a:
-        if alt.get('response'):
-            alt = alt['response']['venue']
-        print alt['name']
+            writer.writerow(data)
 
 
