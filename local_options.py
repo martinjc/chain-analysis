@@ -86,7 +86,7 @@ if __name__ == '__main__':
         lc = LocalComparison()
         venues = lc.get_venue_ids()
 
-        for venue in venues[:100]:
+        for venue in venues[99:1000]:
 
             v = lc.vs.get_venue_json(venue)
             
