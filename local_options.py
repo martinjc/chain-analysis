@@ -86,7 +86,7 @@ if __name__ == '__main__':
         lc = LocalComparison()
         venues = lc.get_venue_ids()
 
-        for venue in venues[99:1000]:
+        for venue in venues[0:1000]:
 
             v = lc.vs.get_venue_json(venue)
             
@@ -94,6 +94,8 @@ if __name__ == '__main__':
             data['venue_id'] = v['id']
             data['venue_name'] = v['name']
             data['chain'] = lc.cd.is_chain(v)
+
+            print v['name']
 
             for distance in distances:
                 c_a, i_a = lc.local_comparison(v, distance)

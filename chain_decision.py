@@ -14,7 +14,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-
+from decorators import venue_response
 from chain_manager import ChainManager
 from category_utils import CategoryTree
 from venue_searcher import VenueSearcher
@@ -32,12 +32,8 @@ class ChainDecider():
         self.ct = CategoryTree()
         self.ccm = CacheChainMatcher()
 
-
+    @venue_response
     def is_home(self, venue):
-
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            venue = venue['response']['venue']
 
         # don't include homes or residences
         if venue.get('categories'):
@@ -62,15 +58,11 @@ class ChainDecider():
         else:
             return False
 
-
+    @venue_response
     def is_chain(self, venue):
         """
         Find out if the venue belongs to a chain
         """
-
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            venue = venue['response']['venue']
 
         chain_id = None
 
@@ -87,12 +79,8 @@ class ChainDecider():
 
         return chain_id
 
-
-    def is_chain_global(self, venue):
-
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            venue = venue['response']['venue']        
+    @venue_response
+    def is_chain_global(self, venue):      
 
         # search for venues with similar names
         global_venues = self.vs.global_search(venue['name'])
@@ -109,12 +97,8 @@ class ChainDecider():
         return self.is_chain_cached(venue)
 
 
-
-    def is_chain_cached(self, venue):
-
-        # just need the venue data, not the whole API response
-        if venue.get('response'):
-            venue = venue['response']['venue']        
+    @venue_response
+    def is_chain_cached(self, venue):       
 
         chain_id = None
 
