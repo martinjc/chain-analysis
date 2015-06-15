@@ -16,9 +16,11 @@
 
 import uuid
 
-from urlparse import urlparse
+from urllib.parse import urlparse
 from db_cache import MongoDBCache
+from decorators import venue_response
 from chain_match import calc_chain_match_confidence
+from venue_match import get_min_venue_from_db
 
 class CachedChain:
     """
@@ -75,13 +77,14 @@ class CachedChain:
         self.confidences = {}
 
 
-    def calculate_confidences():
+    def calculate_confidences(self):
         # go through all the venues in the chain and work out the confidence
         # that the venue actually belongs to the chain
         for venue in self.venues:
             venue_data = self.cache.get_document('venues', {"_id": venue})
+            venue_data = get_min_venue_from_db(venue_data)
             nd, um, sm, cm = self.get_venue_match_confidence(venue_data)
-            self.confidences[venue] = sum([nd,um, sm])       
+            self.confidences[venue] = sum([nd, um, sm, cm])     
 
 
     def prune_chain(self, required_confidence):
@@ -111,6 +114,7 @@ class CachedChain:
             for v in self.venues:
                 if v != venue['id']:
                     v_data = self.cache.get_document('venues', {"_id": v})
+                    v_data = get_min_venue_from_db(v_data)
                     chain.add_venue(v_data)
             return chain.get_venue_match_confidence(venue)
 
@@ -133,7 +137,7 @@ class CachedChain:
         self.cache.remove_document('chain_id_lookup', {'_id': venue['id']})
         self.calculate_confidences()
 
-
+    @venue_response
     def add_venue(self, venue):
 
         if venue.get('response'):
@@ -152,7 +156,7 @@ class CachedChain:
                 self.facebook.add(venue['contact']['facebook'])
         if venue.get('categories'):
             for category in venue['categories']:
-                self.categories.add(category['id'])
+                self.categories.add(category)
 
 
     def save(self):
@@ -166,10 +170,11 @@ class CachedChain:
             if not self.cache.document_exists('chain_id_lookup', {"_id": venue}):
                 # add the inverse lookup
                 v = self.cache.get_document('venues', {"_id": venue})
+                v = get_min_venue_from_db(v)
                 nd, um, sm, cm = self.get_venue_match_confidence(v)
                 data = {'_id': venue,
                         'chain_id': self.id,
-                        'confidence': sum([nd,um,sm])}
+                        'confidence': sum([nd,um,sm,cm])}
                 self.cache.put_document('chain_id_lookup', data)
             # if the lookup already exists, ensure it's pointing to the right chain
             else:
@@ -177,10 +182,11 @@ class CachedChain:
                 if lookup['chain_id'] != self.id:     
                     # add the inverse lookup
                     v = self.cache.get_document('venues', {"_id": venue})
+                    v = get_min_venue_from_db(v)
                     nd, um, sm, cm = self.get_venue_match_confidence(v)
                     data = {'_id': venue,
                             'chain_id': self.id,
-                            'confidence': sum([nd,um,sm])}
+                            'confidence': sum([nd,um,sm,cm])}
                     self.cache.put_document('chain_id_lookup', data)
 
 

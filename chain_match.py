@@ -15,7 +15,7 @@
 #   limitations under the License.
 
 from Levenshtein import ratio
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 def calc_chain_match_confidence(venue, chain):
 
@@ -61,7 +61,7 @@ def calc_chain_match_confidence(venue, chain):
         c2 = set()
         if v.get('categories'):
             for category in v['categories']:
-                c1.add(category['id'])
+                c1.add(category)
             for category in chain['categories']:
                 c2.add(category)
         common = c1 & c2
@@ -69,7 +69,6 @@ def calc_chain_match_confidence(venue, chain):
             category_confidence = 1.0
         else:
             category_confidence = -1.0
-
 
     return average_ratio, url_confidence, social_media_confidence, category_confidence
 
@@ -87,7 +86,7 @@ def find_best_chain_match(venue, candidate_chains):
     
     for candidate in candidate_chains:
         ar, uc, sc, cc = calc_chain_match_confidence(v, candidate)
-        confidence = sum([ar, uc, sc])
+        confidence = sum([ar, uc, sc, cc])
         if confidence > max_confidence:
             max_confidence = confidence
             best_match = candidate

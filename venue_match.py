@@ -15,7 +15,48 @@
 #   limitations under the License.
 
 from Levenshtein import ratio
-from urlparse import urlparse
+from urllib.parse import urlparse
+
+def get_min_venue_from_db(venue):
+
+    if venue.get('response'):
+        venue = venue['response']['venue']
+
+    v = {}
+    v['name'] = venue['name']
+    v['id'] = venue['id']
+    if venue.get('url'):
+        v['url'] = venue['url']
+    if venue.get('contact'):
+        v['contact'] = {}
+        if venue['contact'].get('twitter'):
+            v['contact']['twitter'] = venue['contact']['twitter']
+        if venue['contact'].get('facebook'):
+            v['contact']['facebook'] = venue['contact']['facebook']                    
+    if venue['categories']:
+        v['categories'] = []
+        for category in venue['categories']:
+            v['categories'].append(category['id'])
+
+    return v
+
+def get_min_venue_from_csv(venue):
+
+    v = {}
+    v['name'] = venue['name']
+    v['id'] = venue['id']
+    if venue['url'] is not "":
+        v['url'] = venue['url']
+    if venue['contact-twitter'] is not "" and venue['contact-facebook'] is not "":
+        v['contact'] = {}
+        if venue['contact-twitter'] is not "":
+            v['contact']['twitter'] = venue['contact-twitter']
+        if venue['contact-facebook'] is not "":
+            v['contact']['facebook'] = venue['contact-facebook']                    
+    if venue['categories']:
+        v['categories'] = venue['categories'].split(',')
+
+    return v
 
 def calc_venue_match_confidence(venue1, venue2):
 
@@ -63,9 +104,9 @@ def calc_venue_match_confidence(venue1, venue2):
         c2 = set()
         if v1.get('categories') and v2.get('categories'):
             for category in v1['categories']:
-                c1.add(category['id'])
+                c1.add(category)
             for category in v2['categories']:
-                c2.add(category['id'])
+                c2.add(category)
         common = c1 & c2
         if len(common) > 0:
             category_match = 1.0

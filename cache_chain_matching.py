@@ -14,14 +14,17 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from urlparse import urlparse
+import csv
+import codecs
+
+from urllib.parse import urlparse
 from decorators import venue_response
 
 from db_cache import MongoDBCache
 from chain_manager import ChainManager, CachedChain
 from category_utils import CategoryTree
 
-from venue_match import calc_venue_match_confidence
+from venue_match import calc_venue_match_confidence, get_min_venue_from_csv
 from chain_match import calc_chain_match_confidence, find_best_chain_match
 
 
@@ -29,17 +32,18 @@ class CacheChainMatcher():
     """
     Class to match venues to chains or other venues in a cache
     """
-    def __init__(self, db_name='fsqexp', required_chain_confidence=0.9, required_venue_confidence=0.9):
+    def __init__(self, db_name='fsqexp', required_chain_confidence=0.9, required_venue_confidence=0.95):
 
         # access to the database
         self.cache = MongoDBCache(db=db_name)
+
+        # read venues from file
+        self.csv_reader = csv.DictReader(codecs.open('min_venues.csv', 'r', 'utf-8'))
+
         # ChainManager handles chain operations
         self.cm = ChainManager(db_name=db_name)
         # category tools
         self.ct = CategoryTree()
-
-        # extract information about all the venues from the database
-        self.venues = self.cache.get_collection('min_venues').find(timeout=False)
 
         # value we use to decide if two venues should be matched together
         self.required_venue_confidence = required_venue_confidence
@@ -52,7 +56,6 @@ class CacheChainMatcher():
         Checks for a venue lookup document to see if the venue has already
         been assigned to a chain
         """
-
         chain_id = None
         if self.cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
             chain_id = self.cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id']
@@ -84,15 +87,28 @@ class CacheChainMatcher():
         venue_matches = [venue]
 
         # look at all the other venues that haven't already been compared
-        for i, v in enumerate(self.venues):
+        # extract information about all the venues from the database
+        # v_copy = self.cache.get_collection('venues').find(timeout=False)
+        v_copy = csv.DictReader(codecs.open('min_venues.csv', 'r', 'utf-8'))
 
-            if venue['id'] != v['_id']:
+        count = 0
 
-                # calculate match with this venue
-                nd, um, sm, cm = calc_venue_match_confidence(venue, v)
-                confidence = sum([nd, um, sm])
-                if confidence > self.required_venue_confidence:
-                    venue_matches.append(v)
+        print("starting at %d" % self.i)
+
+        for csv_v in v_copy:
+
+            v = get_min_venue_from_csv(csv_v)
+
+            if count > self.i:
+
+                if venue['id'] != v['id']:
+
+                    # calculate match with this venue
+                    nd, um, sm, cm = calc_venue_match_confidence(venue, v)
+                    confidence = sum([nd, um, sm, cm])
+                    if confidence > self.required_venue_confidence:
+                        venue_matches.append(v)
+            count += 1
 
         # have we found any matches?
         if len(venue_matches) <= 1:
@@ -124,20 +140,34 @@ class CacheChainMatcher():
                     chain = self.cm.add_to_chain(chain_id, [v])
         return chain_id
 
+    def do_matching(self):
+
+        # extract information about all the venues from the database
+        # self.venues = self.cache.get_collection('venues').find(timeout=False)
+
+        self.i = 0
+        for v in self.csv_reader:
+
+            print(v)
+
+            venue = get_min_venue_from_csv(v)
+
+            print(self.i)
+            
+            chain_id = None
+            # check if the venue is already in a chain
+            chain_id = self.check_chain_lookup(venue)
+            if chain_id is None:
+                # compare the venue against existing chains
+                chain_id = self.check_existing_chains(venue)
+                if chain_id is None:
+                    # check the rest of the venues in the cache
+                    chain_id = self.fuzzy_compare_to_cache(venue)
+            self.i += 1     
+
 if __name__ == '__main__':
 
     ccm = CacheChainMatcher()
-
-    # create our own shallow copy of venues list
-    venues = ccm.venues[:]
-    for i, venue in enumerate(venues):
-        chain_id = None
-        # check if the venue is already in a chain
-        chain_id = ccm.check_chain_lookup(venue)
-        if chain_id == None:
-            # compare the venue against existing chains
-            chain_id = ccm.check_existing_chains(venue)
-            if chain_id == None:
-                # check the rest of the venues in the cache
-                chain_id = ccm.fuzzy_compare_to_cache(venue)
+    ccm.do_matching()
+    
 
