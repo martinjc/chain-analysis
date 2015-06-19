@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding:utf-8 -*-
 #
 # Copyright 2014 Martin J Chorley
 #
@@ -18,16 +19,17 @@
 import csv
 import json
 import codecs
+import simstring
 import itertools
 
 from collections import defaultdict
 from Levenshtein import ratio
-from urllib.parse import urlparse
+from urlparse import urlparse
 
 from db_cache import MongoDBCache
 from venue_match import get_min_venue_from_csv
 
-csv_reader = csv.DictReader(codecs.open('min_venues.csv', 'r', 'utf-8'))
+csv_reader = csv.DictReader(open('min_venues.csv', 'r'))  #, 'utf-8'))
 
 names = set()
 name_count = 0
@@ -40,6 +42,8 @@ twitter_count = 0
 
 facebook = set()
 facebook_count = 0
+
+db = simstring.writer('names.db')
 
 for i, v in enumerate(csv_reader):
 
@@ -75,22 +79,25 @@ print('%d unique twitter handles' % (len(twitter)))
 print('%d facebook pages' % (facebook_count))
 print('%d unique facebook pages' % (len(facebook)))
 
+for name in names:
+        db.insert(name)
+db.close()
 
-ratios = defaultdict(dict)
-with open('ratios.json', 'w') as ratio_file:
+# ratios = defaultdict(dict)
+# with open('ratios.json', 'w') as ratio_file:
 
-    ratios = defaultdict(dict)
+#     ratios = defaultdict(dict)
 
-    i = 0
-    name_pairs = itertools.combinations(names, 2)
-    for n1, n2 in name_pairs:
+#     i = 0
+#     name_pairs = itertools.combinations(names, 2)
+#     for n1, n2 in name_pairs:
 
-        if i % 1000000 == 0:
-            print(i)
-        r = ratio(n1, n2)
-        if r > 0.8:
-            ratios[n1][n2] = r
-        i += 1
+#         if i % 1000000 == 0:
+#             print(i)
+#         r = ratio(n1, n2)
+#         if r > 0.8:
+#             ratios[n1][n2] = r
+#         i += 1
 
-    json.dump(ratios, ratio_file)
+#     json.dump(ratios, ratio_file)
 

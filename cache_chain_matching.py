@@ -17,7 +17,7 @@
 import csv
 import codecs
 
-from urllib.parse import urlparse
+from urlparse import urlparse
 from decorators import venue_response
 
 from db_cache import MongoDBCache

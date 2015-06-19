@@ -16,7 +16,7 @@
 
 import uuid
 
-from urllib.parse import urlparse
+from urlparse import urlparse
 from db_cache import MongoDBCache
 from decorators import venue_response
 from chain_match import calc_chain_match_confidence

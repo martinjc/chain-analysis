@@ -15,7 +15,7 @@
 #   limitations under the License.
 
 from Levenshtein import ratio
-from urllib.parse import urlparse
+from urlparse import urlparse
 
 def calc_chain_match_confidence(venue, chain):
 

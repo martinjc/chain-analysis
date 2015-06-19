@@ -2,3 +2,9 @@ _credentials.py
 __*.py
 *.csv
 simstring.py
+
+*.db
+
+names.db.1.cdb
+
+*.cdb
