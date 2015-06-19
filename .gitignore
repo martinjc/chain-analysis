@@ -1,3 +1,4 @@
 _credentials.py
 __*.py
 *.csv
+simstring.py
