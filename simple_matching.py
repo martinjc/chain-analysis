@@ -15,7 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-
+import sys
 import csv
 import json
 import codecs
@@ -27,6 +27,8 @@ from urlparse import urlparse
 
 from db_cache import MongoDBCache
 from venue_match import get_min_venue_from_csv
+from chain_manager import ChainManager
+from chain_match import find_best_chain_match
 
 csv_reader = csv.DictReader(open('min_venues.csv', 'r'))  #, 'utf-8'))
 
@@ -104,6 +106,88 @@ with open('fb.json', 'w') as fb_file:
 with open('facebook_names.json', 'w') as f_file:
     json.dump(facebook_names, f_file)
 
+# ChainManager handles chain operations
 
+cache = MongoDBCache(db='fsqexp')
+cm = ChainManager(db_name='fsqexp')
+
+for url, venues in urls.iteritems():
+    chain_id = []
+
+    full_venues = []
+    for venue in venues:
+        if cache.document_exists('venues', {'_id': venue}):
+            full_venues.append(cache.get_document('venues', {'_id': venue}))
+
+    for venue in full_venues:
+
+        if venue.get('response'):
+            venue = venue['response']['venue']      
+
+        if cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
+            chain_id.append(cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id'])
+
+    if len(chain_id) > 1:
+        candidate_chains = [cache.get_document('chains', {"_id": chain}) for chain in chain_id]
+        for venue in full_venues:
+            chain, confidence = find_best_chain_match(venue, candidate_chains)
+            chain_id = chain['_id']
+            cm.add_to_chain(chain_id, [venue])
+    elif len(chain_id) == 1:
+        cm.add_to_chain(chain_id[0], full_venues)
+    elif len(chain_id) == 0:
+        cm.create_chain(full_venues)
+
+for twitter, venues in twitter.iteritems():
+    chain_id = []
+
+    full_venues = []
+    for venue in venues:
+        if cache.document_exists('venues', {'_id': venue}):
+            full_venues.append(cache.get_document('venues', {'_id': venue}))
+
+    for venue in full_venues:
+
+        if venue.get('response'):
+            venue = venue['response']['venue'] 
+
+        if cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
+            chain_id.append(cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id'])
+
+    if len(chain_id) > 1:
+        candidate_chains = [cache.get_document('chains', {"_id": chain}) for chain in chain_id]
+        for venue in full_venues:
+            chain, confidence = find_best_chain_match(venue, candidate_chains)
+            chain_id = chain['_id']
+            cm.add_to_chain(chain_id, [venue])
+    elif len(chain_id) == 1:
+        cm.add_to_chain(chain_id[0], full_venues)
+    elif len(chain_id) == 0:
+        cm.create_chain(full_venues)
             
+for facebook, venues in facebook.iteritems():
+    chain_id = []
 
+    full_venues = []
+    for venue in venues:
+        if cache.document_exists('venues', {'_id': venue}):
+            full_venues.append(cache.get_document('venues', {'_id': venue}))
+
+    for venue in full_venues:
+
+        if venue.get('response'):
+            venue = venue['response']['venue'] 
+
+        if cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
+            chain_id.append(cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id'])
+
+    if len(chain_id) > 1:
+        candidate_chains = [cache.get_document('chains', {"_id": chain}) for chain in chain_id]
+        for venue in full_venues:
+            chain, confidence = find_best_chain_match(venue, candidate_chains)
+            chain_id = chain['_id']
+            cm.add_to_chain(chain_id, [venue])
+    elif len(chain_id) == 1:
+        cm.add_to_chain(chain_id[0], full_venues)
+    elif len(chain_id) == 0:
+        cm.create_chain(full_venues)

@@ -154,10 +154,9 @@ class CachedChain:
                 self.twitter.add(venue['contact']['twitter'])
             if venue['contact'].get('facebook'):
                 self.facebook.add(venue['contact']['facebook'])
-        if venue.get('categories'):
-            for category in venue['categories']:
-                self.categories.add(category)
-
+        # if venue.get('categories'):
+        #     for category in venue['categories']:
+                # self.categories.add(category)
 
     def save(self):
 
