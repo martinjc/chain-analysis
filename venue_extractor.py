@@ -27,8 +27,7 @@ class VenueExtractor():
         self.cache = MongoDBCache(db=db_name)
 
     def extract_venues(self):
-        venues = self.cache.get_collection('venues').find(timeout=False)
-
+        venues = self.cache.get_collection('venues')
         with open('min_venues.csv', 'w') as venues_file:
 
             venues_file.write('name,id,url,contact-twitter,contact-facebook,categories\n')
@@ -74,7 +73,7 @@ class VenueExtractor():
                 else:
                     min_v['categories'] = []
 
-                venues_file.write('%s,' % min_v['name'].encode('utf-8'))
+                venues_file.write('\"%s\",' % min_v['name'].encode('utf-8'))
                 venues_file.write('%s,' % min_v['id'])
                 venues_file.write('%s,' % min_v['url'].encode('utf-8'))
                 venues_file.write('%s,' % min_v['contact']['twitter'].encode('utf-8'))

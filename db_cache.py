@@ -66,11 +66,13 @@ class MongoDBCache(object):
         else:
             return False
 
-
     def get_document(self, collection, query, check_fresh=False):
-        assert self.document_exists(collection, query, check_fresh)
+        try:
+            assert self.document_exists(collection, query, check_fresh)
+        except AssertionError as e:
+            print query
+            pass
         return self.db[collection].find_one(query)
-
 
     def get_documents(self, collection, query):
         return self.db[collection].find(query)
@@ -83,7 +85,7 @@ class MongoDBCache(object):
 
 
     def get_collection(self, collection):
-        return self.db[collection]
+        return self.db[collection].find()
 
 
     def remove_document(self, collection, query):

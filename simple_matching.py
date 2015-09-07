@@ -34,6 +34,7 @@ csv_reader = csv.DictReader(open('min_venues.csv', 'r'))  #, 'utf-8'))
 
 names = set()
 name_count = 0
+name_ids = defaultdict(list)
 
 urls = defaultdict(list)
 url_names = defaultdict(list)
@@ -45,7 +46,6 @@ twitter_count = 0
 
 facebook = defaultdict(list)
 facebook_names = defaultdict(list)
-
 facebook_count = 0
 
 # find all the unique names, urls, twitter handles and facebook pages
@@ -57,6 +57,7 @@ for i, v in enumerate(csv_reader):
     venue = get_min_venue_from_csv(v)
     names.add(venue['name'])
     name_count += 1
+    name_ids[venue['name']].append(venue['id'])
 
     if venue.get('url'):
         url = urlparse(venue['url']).netloc.lstrip('www.')
@@ -89,7 +90,11 @@ print('%d unique twitter handles' % (len(twitter.keys())))
 print('%d facebook pages' % (facebook_count))
 print('%d unique facebook pages' % (len(facebook.keys())))
 
-json.dump({'urls': urls}, open('urls.json', 'w'))
+with open('name_ids.json', 'w') as n_file:
+    json.dump(name_ids, n_file)
+
+with open('urls.json', 'w') as u_file:
+    json.dump({'urls': urls}, u_file)
 
 with open('url_names.json', 'w') as u_file:
     json.dump(url_names, u_file)
@@ -111,83 +116,40 @@ with open('facebook_names.json', 'w') as f_file:
 cache = MongoDBCache(db='fsqexp')
 cm = ChainManager(db_name='fsqexp')
 
-for url, venues in urls.iteritems():
-    chain_id = []
+csv_reader = csv.DictReader(open('min_venues.csv', 'r'))
 
-    full_venues = []
-    for venue in venues:
-        if cache.document_exists('venues', {'_id': venue}):
-            full_venues.append(cache.get_document('venues', {'_id': venue}))
+for i, v in enumerate(csv_reader):
 
-    for venue in full_venues:
+    if i % 10000 == 0:
+        print(i)
 
-        if venue.get('response'):
-            venue = venue['response']['venue']      
+    chains = cache.get_collection('chains')
 
-        if cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
-            chain_id.append(cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id'])
+    venue = get_min_venue_from_csv(v)
 
-    if len(chain_id) > 1:
-        candidate_chains = [cache.get_document('chains', {"_id": chain}) for chain in chain_id]
-        for venue in full_venues:
-            chain, confidence = find_best_chain_match(venue, candidate_chains)
-            chain_id = chain['_id']
-            cm.add_to_chain(chain_id, [venue])
-    elif len(chain_id) == 1:
-        cm.add_to_chain(chain_id[0], full_venues)
-    elif len(chain_id) == 0:
-        cm.create_chain(full_venues)
+    url = None
+    if venue.get('url'):
+        url = urlparse(venue['url']).netloc.lstrip('www.')
 
-for twitter, venues in twitter.iteritems():
-    chain_id = []
+    t = None
+    f = None
+    if venue.get('contact'):
+        if venue['contact'].get('twitter'):
+            t = venue['contact']['twitter']
 
-    full_venues = []
-    for venue in venues:
-        if cache.document_exists('venues', {'_id': venue}):
-            full_venues.append(cache.get_document('venues', {'_id': venue}))
+        if venue['contact'].get('facebook'):
+            f = venue['contact']['facebook']
 
-    for venue in full_venues:
+    if url or t or f:
+        if len(urls[url]) > 1 or len(twitter[t]) > 1 or len(facebook[f]) > 1:
+            found = False
+            for chain in chains:
+                if url in chain['urls'] or twitter in chain['twitter'] or facebook in chain['facebook']:
+                    chain_id = chain['_id']
+                    cm.add_to_chain(chain_id, [venue])
+                    found = True
+                    break
+            if not found:
+                cm.create_chain([venue])    
 
-        if venue.get('response'):
-            venue = venue['response']['venue'] 
 
-        if cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
-            chain_id.append(cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id'])
-
-    if len(chain_id) > 1:
-        candidate_chains = [cache.get_document('chains', {"_id": chain}) for chain in chain_id]
-        for venue in full_venues:
-            chain, confidence = find_best_chain_match(venue, candidate_chains)
-            chain_id = chain['_id']
-            cm.add_to_chain(chain_id, [venue])
-    elif len(chain_id) == 1:
-        cm.add_to_chain(chain_id[0], full_venues)
-    elif len(chain_id) == 0:
-        cm.create_chain(full_venues)
-            
-for facebook, venues in facebook.iteritems():
-    chain_id = []
-
-    full_venues = []
-    for venue in venues:
-        if cache.document_exists('venues', {'_id': venue}):
-            full_venues.append(cache.get_document('venues', {'_id': venue}))
-
-    for venue in full_venues:
-
-        if venue.get('response'):
-            venue = venue['response']['venue'] 
-
-        if cache.document_exists('chain_id_lookup', {'_id': venue['id']}):
-            chain_id.append(cache.get_document('chain_id_lookup', {'_id': venue['id']})['chain_id'])
-
-    if len(chain_id) > 1:
-        candidate_chains = [cache.get_document('chains', {"_id": chain}) for chain in chain_id]
-        for venue in full_venues:
-            chain, confidence = find_best_chain_match(venue, candidate_chains)
-            chain_id = chain['_id']
-            cm.add_to_chain(chain_id, [venue])
-    elif len(chain_id) == 1:
-        cm.add_to_chain(chain_id[0], full_venues)
-    elif len(chain_id) == 0:
-        cm.create_chain(full_venues)

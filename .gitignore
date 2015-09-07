@@ -10,3 +10,11 @@ names.db.1.cdb
 *.cdb
 
 ratios.json
+
+facebook_names.json
+
+fb.json
+
+name_ids.json
+
+*.json
