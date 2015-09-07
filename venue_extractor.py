@@ -14,6 +14,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import csv
 import json
 from db_cache import MongoDBCache
 
@@ -27,44 +28,44 @@ class VenueExtractor():
         self.cache = MongoDBCache(db=db_name)
 
     def extract_venues(self):
-        venues = self.cache.get_collection('venues')
-        with open('min_venues.csv', 'w') as venues_file:
 
-            venues_file.write('name,id,url,contact-twitter,contact-facebook,categories\n')
-            venues_file.flush()
+        venues = self.cache.get_collection('venues')
+        labels = ['name', 'id', 'url', 'contact-twitter', 'contact-facebook', 'categories']
+        
+        with open('min_venues.csv', 'w') as outfile:
+            csv_writer = csv.DictWriter(outfile, labels)
+            csv_writer.writeheader()
+
             i = 0
             for v in venues:
                 if i % 1000 == 0:
                     print i
-                    venues_file.flush()
                 if v.get('response'):
                     v = v['response']['venue']
 
                 min_v = {}
                 min_v['id'] = v['id']
-                min_v['name'] = v['name']
+                min_v['name'] = v['name'].encode('utf-8')
 
                 if v.get('url') :
-                    min_v['url'] = v['url']
+                    min_v['url'] = v['url'].encode('utf-8')
                 else:
                     min_v['url'] = ""
                 
                 if v.get('contact'):
-                    min_v['contact'] = {}
 
                     if v['contact'].get('twitter'):
-                        min_v['contact']['twitter'] = v['contact']['twitter']
+                        min_v['contact-twitter'] = v['contact']['twitter'].encode('utf-8')
                     else:
-                        min_v['contact']['twitter'] = ""
+                        min_v['contact-twitter'] = ""
 
                     if v['contact'].get('facebook'):
-                        min_v['contact']['facebook'] = v['contact']['facebook']
+                        min_v['contact-facebook'] = v['contact']['facebook'].encode('utf-8')
                     else:
-                        min_v['contact']['facebook'] = ""
+                        min_v['contact-facebook'] = ""
                 else:
-                    min_v['contact'] = {}
-                    min_v['contact']['twitter'] = ""
-                    min_v['contact']['facebook'] = ""
+                    min_v['contact-twitter'] = ""
+                    min_v['contact-facebook'] = ""
 
                 if v.get('categories'):
                     min_v['categories'] = []
@@ -73,14 +74,8 @@ class VenueExtractor():
                 else:
                     min_v['categories'] = []
 
-                venues_file.write('\"%s\",' % min_v['name'].encode('utf-8'))
-                venues_file.write('%s,' % min_v['id'])
-                venues_file.write('%s,' % min_v['url'].encode('utf-8'))
-                venues_file.write('%s,' % min_v['contact']['twitter'].encode('utf-8'))
-                venues_file.write('%s,' % min_v['contact']['facebook'].encode('utf-8'))
-                venues_file.write('\"%s\"\n' % ','.join(min_v['categories']))
+                csv_writer.writerow(min_v)
                 i += 1
-
 
 if __name__ == '__main__':
     v = VenueExtractor()
