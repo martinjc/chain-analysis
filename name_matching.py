@@ -15,7 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-
+import sys
 import csv
 import json
 import codecs
@@ -34,16 +34,16 @@ csv_reader = csv.DictReader(open('min_venues.csv', 'r'))  #, 'utf-8'))
 names = set()
 name_count = 0
 
-urls = set()
-url_count = 0
+# urls = set()
+# url_count = 0
 
-twitter = set()
-twitter_count = 0
+# twitter = set()
+# twitter_count = 0
 
-facebook = set()
-facebook_count = 0
+# facebook = set()
+# facebook_count = 0
 
-db = simstring.writer('names.db')
+# db = simstring.writer('names.db')
 
 for i, v in enumerate(csv_reader):
 
@@ -54,50 +54,51 @@ for i, v in enumerate(csv_reader):
     names.add(venue['name'])
     name_count += 1
 
-    if venue.get('url'):
-        url_count += 1
-        urls.add(venue['url'])
+    # if venue.get('url'):
+    #     url_count += 1
+    #     urls.add(venue['url'])
 
-    if venue.get('contact'):
-        if venue['contact'].get('twitter'):
-            twitter_count += 1
-            twitter.add(venue['contact']['twitter'])
+    # if venue.get('contact'):
+    #     if venue['contact'].get('twitter'):
+    #         twitter_count += 1
+    #         twitter.add(venue['contact']['twitter'])
 
-        if venue['contact'].get('facebook'):
-            facebook_count += 1
-            facebook.add(venue['contact']['facebook'])
+    #     if venue['contact'].get('facebook'):
+    #         facebook_count += 1
+    #         facebook.add(venue['contact']['facebook'])
 
 print('%d venues' % (name_count))
 print('%d unique names' % len(names))
 
-print('%d urls' % (url_count))
-print('%d unique urls' % (len(urls)))
+# print('%d urls' % (url_count))
+# print('%d unique urls' % (len(urls)))
 
-print('%d twitter handles' % (twitter_count))
-print('%d unique twitter handles' % (len(twitter)))
+# print('%d twitter handles' % (twitter_count))
+# print('%d unique twitter handles' % (len(twitter)))
 
-print('%d facebook pages' % (facebook_count))
-print('%d unique facebook pages' % (len(facebook)))
+# print('%d facebook pages' % (facebook_count))
+# print('%d unique facebook pages' % (len(facebook)))
 
-for name in names:
-        db.insert(name)
-db.close()
+# for name in names:
+#     db.insert(name)
+# db.close()
 
-# ratios = defaultdict(dict)
-# with open('ratios.json', 'w') as ratio_file:
+ratios = defaultdict(dict)
+with open('ratios.json', 'w') as ratio_file:
 
-#     ratios = defaultdict(dict)
+    ratios = defaultdict(dict)
 
-#     i = 0
-#     name_pairs = itertools.combinations(names, 2)
-#     for n1, n2 in name_pairs:
+    i = 0
+    name_pairs = itertools.combinations(names, 2)
 
-#         if i % 1000000 == 0:
-#             print(i)
-#         r = ratio(n1, n2)
-#         if r > 0.8:
-#             ratios[n1][n2] = r
-#         i += 1
+    for n1, n2 in name_pairs:
 
-#     json.dump(ratios, ratio_file)
+        if i % 1000000 == 0:
+            print(i)
+        r = ratio(n1, n2)
+        if r > 0.7:
+            ratios[n1][n2] = r
+        i += 1
+
+    json.dump(ratios, ratio_file)
 
