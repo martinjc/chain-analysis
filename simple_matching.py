@@ -15,6 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+import uuid
 import sys
 import csv
 import json
@@ -29,6 +30,19 @@ from db_cache import MongoDBCache
 from venue_match import get_min_venue_from_csv
 from chain_manager import ChainManager
 from chain_match import find_best_chain_match
+
+class Chain:
+
+    def __init__(self):
+
+        self.venues = set()
+        self.id = uuid.uuid4().hex
+
+    def __to_dict__(self):
+        return {'id': self.id, 'venues': list(self.venues)}
+
+    def __repr__(self):
+        return json.dumps({'id': self.id, 'venues': list(self.venues)})
 
 csv_reader = csv.DictReader(open('min_venues.csv', 'r'))  #, 'utf-8'))
 
@@ -64,62 +78,91 @@ for i, v in enumerate(csv_reader):
             f = venue['contact']['facebook']
             facebook_ids[f].append(venue['id'])
 
-with open('url_check.json', 'w') as urlfile:
-    json.dump(url_ids, urlfile)
 
-cache = MongoDBCache(db='fsqexp')
-cm = ChainManager(db_name='fsqexp')
+# cache = MongoDBCache(db='fsqexp')
+# cm = ChainManager(db_name='fsqexp')
+chains = {}
+
+print 'name'
+
+for name, vs in name_ids.iteritems():
+    if len(vs) > 1:
+        if name is not " ":
+            print name, len(vs)
+            chain = Chain()
+            chain.venues = chain.venues | set(vs)
+            chains[chain.id] = chain
+            for v in vs:
+                chain_lookup[v] = chain.id
 
 print 'urls'
 
-for url, vs in url_ids.iteritems():
+for u, vs in url_ids.iteritems():
     if len(vs) > 1:
-        if url is not " ":
-            print url, len(vs)
-            venue_list = [venues[v] for v in vs]
-            print len(venue_list)
-            chain = cm.create_chain(venue_list)
-            for v in vs:
-                chain_lookup[v] = chain.id
+        print u, len(vs)
+        cchains = set()
+        for v in vs:
+            if chain_lookup.get(v):
+                cchains.add(chain_lookup[v])
+        if len(cchains) > 1:
+            print 'more than one chain!'
+        if len(cchains) >  0:
+            chain = chains[list(cchains)[0]]
+            chain.venues = chain.venues | set(vs)
+        else:
+            chain = Chain()
+            chain.venues = chain.venues | set(vs)
+            chains[chain.id] = chain
+        for v in vs:
+            chain_lookup[v] = chain.id
 
 print 'twitter'
 
 for t, vs in twitter_ids.iteritems():
     if len(vs) > 1:
-        venue_list = [venues[v] for v in vs]
-        chains = set()
+        print t, len(vs)
+        cchains = set()
         for v in vs:
             if chain_lookup.get(v):
-                chains.add(chain_lookup[v])
-        if len(chains) > 1:
+                cchains.add(chain_lookup[v])
+        if len(cchains) > 1:
             print 'more than one chain!'
-        if len(chains) >  0:
-            chain = cm.load_chain(chains[0])
-            chain.add_to_chain(chain, venue_list)
+        if len(cchains) >  0:
+            chain = chains[list(cchains)[0]]
+            chain.venues = chain.venues | set(vs)
         else:
-            chain = cm.create_chain(venue_list)
-            for v in vs:
-                chain_lookup[v] = chain.id
+            chain = Chain()
+            chain.venues = chain.venues | set(vs)
+            chains[chain.id] = chain
+        for v in vs:
+            chain_lookup[v] = chain.id
 
 print 'facebook'
 
 for f, vs in facebook_ids.iteritems():
     if len(vs) > 1:
-        venue_list = [venues[v] for v in vs]
-        chains = set()
+        print f, len(vs)
+        cchains = set()
         for v in vs:
             if chain_lookup.get(v):
-                chains.add(chain_lookup[v])
-        if len(chains) > 1:
+                cchains.add(chain_lookup[v])
+        if len(cchains) > 1:
             print 'more than one chain!'
-        if len(chains) > 0:
-            chain = cm.load_chain(chains[0])
-            chain.add_to_chain(chain, venue_list)
+        if len(cchains) >  0:
+            chain = chains[list(cchains)[0]]
+            chain.venues = chain.venues | set(vs)
         else:
-            chain = cm.create_chain(venue_list)
-            for v in vs:
-                chain_lookup[v] = chain.id
+            chain = Chain()
+            chain.venues = chain.venues | set(vs)
+            chains[chain.id] = chain
+        for v in vs:
+            chain_lookup[v] = chain.id
 
   
+with open('chain_lookup_with_names.json', 'w') as chain_file:
+    json.dump(chain_lookup, chain_file)
 
+chains = [c.__to_dict__() for c in chains.values()]
+with open('simple_chains_with_names.json', 'w') as chain_file:
+    json.dump(chains, chain_file)
 
